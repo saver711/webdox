@@ -1,0 +1,14 @@
+lint-staged
+echo "✅📝 Linting went well!"
+vitest
+echo "✅🧪 Testing went well!"
+
+branch_name=$(git symbolic-ref --short HEAD)
+
+if ! echo "$branch_name" | grep -Eq '^(main|dev|[a-z]{2}-(fix|feat|chore)-[A-Z]+-[0-9]+-[a-z0-9-]+)$'; then
+  echo "❌ Invalid branch name: $branch_name"
+  echo "✅ Allowed: main, dev, or xx-type-ABC-1234-description"
+  exit 1
+fi
+
+echo "✅ Branch name is valid: $branch_name"

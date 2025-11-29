@@ -1,0 +1,1993 @@
+---
+title: Table with Client-Side Data
+description: Build accessible, scalable tables with pagination, sorting, and filtering
+---
+
+## Introduction
+
+Tired of UI component libraries that give you a table component without real, practical examples? This guide demonstrates best practices for building accessible, scalable tables with pagination, sorting, and filtering—following patterns that work across any UI library.
+
+For this guide, we'll use **shadcn/ui** to implement these concepts, but the same principles apply to MUI, Chakra UI, or any other framework. shadcn is just an example; we may add other UI libraries later.
+
+We'll be using a **Next.js application** and following Next.js best practices. However, the core concepts translate directly to React, Vue, Svelte, or any other framework—Next.js is simply our example here.
+
+---
+
+## Core Principles
+
+### Separation of Concerns
+
+The table component should be purely presentational. The table receives data and emits events.
+
+### Composability
+
+Allow customization of parts like headers, cells, and empty states using render props or custom components. shadcn's column definition pattern already supports this:
+
+```tsx
+{
+  id: "select",
+  header: ({ table }) => (
+    <RecommendationsTableSelectAllCheckbox table={table} />
+  ),
+  cell: ({ row }) => (
+    <RecommendationsTableSelectRowCheckbox row={row} />
+  ),
+}
+```
+
+### Type Safety
+
+Use TypeScript generics to type rows and columns. This ensures compile-time safety and better IDE support.
+
+### External Integration
+
+The table component never fetches data. It accepts pre-fetched data and handlers from the parent.
+
+---
+
+## Setup & Installation
+
+First, install the required dependencies:
+
+```npm
+npx shadcn@latest init
+```
+
+```npm
+npx shadcn@latest add table
+```
+
+```npm
+npm i @tanstack/react-table
+```
+
+---
+
+## Basic Table Component
+
+<Tabs items={['Data Model', 'Static Data', 'Server Component (Bloggers Page)']}>
+  <Tab value="Data Model">
+```tsx title="app/bloggers/models/blogger.model.ts"
+export interface Blogger {
+  id: string
+  name: string
+  bio: string
+  createdAt: string
+  socialLinks: Array<{
+    platform: string
+    url: string
+  }>
+}
+````
+  </Tab>
+
+  <Tab value="Static Data">
+```tsx title="data/bloggers.json"
+[
+  {
+    "id": "1",
+    "name": "John Doe",
+    "bio": "Full-stack developer passionate about web technologies",
+    "createdAt": "2025-01-15T10:00:00Z",
+    "socialLinks": [
+      {
+        "platform": "twitter",
+        "url": "https://twitter.com/johndoe"
+      }
+    ]
+  },
+  {
+    "id": "2",
+    "name": "Jane Smith",
+    "bio": "UI/UX designer and front-end specialist",
+    "createdAt": "2025-02-20T14:30:00Z",
+    "socialLinks": [
+      {
+        "platform": "linkedin",
+        "url": "https://linkedin.com/in/janesmith"
+      }
+    ]
+  },
+  {
+    "id": "3",
+    "name": "Mike Johnson",
+    "bio": "Backend engineer focused on scalable systems",
+    "createdAt": "2025-03-10T09:15:00Z",
+    "socialLinks": [
+      {
+        "platform": "github",
+        "url": "https://github.com/mikejohnson"
+      }
+    ]
+  },
+  {
+    "id": "4",
+    "name": "Sarah Williams",
+    "bio": "DevOps and cloud architecture enthusiast",
+    "createdAt": "2025-01-25T16:45:00Z",
+    "socialLinks": [
+      {
+        "platform": "twitter",
+        "url": "https://twitter.com/sarahwilliams"
+      }
+    ]
+  },
+  {
+    "id": "5",
+    "name": "David Brown",
+    "bio": "Mobile app developer with a love for React Native",
+    "createdAt": "2025-02-05T11:20:00Z",
+    "socialLinks": [
+      {
+        "platform": "linkedin",
+        "url": "https://linkedin.com/in/davidbrown"
+      }
+    ]
+  }
+]
+````
+
+  </Tab>
+
+    <Tab value="Server Component (Bloggers Page)">
+
+```tsx title="app/bloggers/page.tsx"
+import { BloggersTable } from "./components/bloggers-table";
+import type { Blogger } from "./models/blogger.model";
+
+export const revalidate = false; // Static generation at build time
+
+async function getData(): Promise<Blogger[]> {
+  const bloggers = (await import("@/data/bloggers.json")).default;
+  return bloggers;
+}
+
+export const metadata = {
+  title: "Bloggers",
+  description: "View all bloggers",
+};
+
+export default async function BloggersPage() {
+  const data = await getData();
+
+  return (
+    <div className="container mx-auto py-10">
+      <BloggersTable data={data} />
+    </div>
+  );
+}
+```
+
+  </Tab>
+</Tabs>
+
+#### Understanding Next.js Server Components vs Server-Side Data
+
+A **Server Component** doesn’t mean it handles **server-side data** — it just means the component itself runs on the server before sending HTML to the client.
+
+Here, we fetch data on the server (following Next.js best practices) to ensure cleaner, more efficient rendering. Even though the data is static and the benefit is minor, this approach encourages good habits.
+
+### Base DataTable Component
+
+This is your core, reusable table component. It handles **visual rendering only**—no data fetching or complex logic.
+
+```tsx title="app/components/ui/table/data-table.tsx"
+"use client";
+
+import {
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  type SortingState,
+  useReactTable,
+} from "@tanstack/react-table";
+import { useState } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+interface DataTableProps<TData, TValue> {
+  columns: ColumnDef<TData, TValue>[];
+  data: TData[];
+}
+
+export const DataTable = <TData, TValue>({
+  columns,
+  data,
+}: DataTableProps<TData, TValue>) => {
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSorting,
+    state: {
+      sorting,
+    },
+  });
+
+  return (
+    <div>
+      <div className="overflow-hidden rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  return (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  No results.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+};
+```
+
+### Client Component (Bloggers Table)
+
+This component manages all the logic: data, filtering, deletion, etc. The `DataTable` receives only what it needs.
+
+```tsx title="app/bloggers/components/bloggers-table.tsx"
+"use client";
+
+import { useState } from "react";
+import { DataTable } from "@/app/components/ui/table/data-table";
+import type { Blogger } from "../models/blogger.model";
+import { bloggersTableColumns } from "../consts/bloggers-table-columns.const";
+
+interface BloggersTableProps {
+  data: Blogger[];
+}
+
+export const BloggersTable = ({ data }: BloggersTableProps) => {
+  // const [filteredData, setFilteredData] = useState<Blogger[]>(data);
+  // We will add filtration later, That's why we
+  //have Data table here inside client component not outside in app/bloggers/
+
+  return (
+    <div>
+      // <BloggersFilterBar data={data} onFilter={setFilteredData} />
+      // <DataTable columns={bloggersTableColumns} data={filteredData} />
+      <DataTable columns={bloggersTableColumns} data={data} />
+    </div>
+  );
+};
+```
+
+---
+
+## Adding Sorting
+
+Sorting is straightforward with @tanstack/react-table. Since most applications don't need complex multi-column sorting, we handle it **within the table component** using the built-in `getSortedRowModel()`.
+
+For more complicated sorting needs, you can follow the same pattern as filtration (handle it outside the table). But for typical use cases, this is sufficient.
+
+### Sorting Button Component and Columns With Sorting
+
+<Tabs items={['Sorting Button', 'Table Columns']}>
+  <Tab value="Sorting Button">
+```tsx title="app/components/ui/table/table-sorting-button.tsx"
+import type { Column } from "@tanstack/react-table"
+import { ArrowUpDown, SortAsc, SortDesc } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+interface SortingButtonProps<TData> {
+column: Column<TData>
+label: string
+}
+
+export const TableSortingButton = <TData>({
+  column,
+  label
+}: SortingButtonProps<TData>) => {
+  const isSorted = column.getIsSorted()
+
+const getSortIcon = () => {
+switch (isSorted) {
+case "asc":
+return <SortAsc className="h-4 w-4 text-green-700" />
+case "desc":
+return <SortDesc className="h-4 w-4 text-green-700" />
+default:
+return <ArrowUpDown className="h-4 w-4" />
+}
+}
+
+return (
+
+<Button
+  className="flex w-full items-center gap-1"
+  variant="ghost"
+  onClick={() => {
+    column.toggleSorting(isSorted === "asc");
+  }}
+>
+  {getSortIcon()}
+  {label}
+</Button>
+) }
+
+````
+  </Tab>
+
+  <Tab value="Table Columns">
+```tsx title="app/bloggers/consts/bloggers-table-columns.const.tsx"
+"use client"
+
+import type { ColumnDef } from "@tanstack/react-table"
+import { format } from "date-fns" // Feel free to use any date formatting
+import { TableSortingButton } from "@/app/components/ui/table/table-sorting-button"
+import type { Blogger } from "../models/blogger.model"
+
+export const bloggersTableColumns: ColumnDef<Blogger>[] = [
+  {
+    accessorKey: "name",
+    header: ({ column }) => <TableSortingButton column={column} label="Name" />
+  },
+  {
+    accessorKey: "bio",
+    header: ({ column }) => <TableSortingButton column={column} label="Bio" />
+  },
+  {
+    accessorKey: "createdAt",
+    header: ({ column }) => (
+      <TableSortingButton column={column} label="Created At" />
+    ),
+    cell: ({ row }) => {
+      const date = new Date(row.getValue("createdAt") as string)
+      return format(date, "PPP")
+    }
+  }
+]
+````
+
+  </Tab>
+</Tabs>
+---
+
+## Adding Row Selection
+
+Row selection is useful for bulk actions. The table component tracks selected rows and exposes the count.
+
+### Update DataTable Component
+
+Update the `data-table.tsx` file with the following changes:
+
+**At the top, add to state:**
+
+```typescript
+const [rowSelection, setRowSelection] = useState({});
+```
+
+**In the `useReactTable` hook, add:**
+
+```typescript
+onRowSelectionChange: setRowSelection,
+```
+
+**In the `state` object, add:**
+
+```typescript
+rowSelection,
+```
+
+**Before the table JSX, add:**
+
+```typescript
+const selectedRowsCount = table.getFilteredSelectedRowModel().rows.length;
+const rowsCount = table.getFilteredRowModel().rows.length;
+```
+
+**And in the return JSX, add this after the table div container:**
+
+```typescript
+<div className="flex justify-between items-center py-2">
+  <div className="text-muted-foreground flex-1 text-sm">
+    {selectedRowsCount} of {rowsCount} row(s) selected.
+  </div>
+</div>
+```
+
+### Create Selection Checkbox Components
+
+<Tabs items={['Select All', 'Select Row']}>
+  <Tab value="Select All">
+```tsx title="app/components/ui/table/table-select-all-checkbox.tsx"
+import type { Table } from "@tanstack/react-table"
+import { Checkbox } from "@/components/ui/checkbox"
+
+type TableSelectAllCheckboxProps<T> = {
+table: Table<T>
+}
+
+export const TableSelectAllCheckbox = <T>({
+  table
+}: TableSelectAllCheckboxProps<T>) => (
+  <Checkbox
+    checked={
+      table.getIsAllPageRowsSelected() ||
+      (table.getIsSomePageRowsSelected() && "indeterminate")
+    }
+    onCheckedChange={value => table.toggleAllPageRowsSelected(!!value)}
+    aria-label="Select all"
+  />
+)
+````
+  </Tab>
+
+  <Tab value="Select Row">
+```tsx title="app/components/ui/table/table-select-row-checkbox.tsx"
+import type { Row } from "@tanstack/react-table"
+import { Checkbox } from "@/components/ui/checkbox"
+
+type TableSelectRowCheckboxProps<T> = {
+row: Row<T>
+}
+
+export const TableSelectRowCheckbox = <T>({
+  row
+}: TableSelectRowCheckboxProps<T>) =>
+  (
+    <Checkbox
+      checked={row.getIsSelected()}
+      onCheckedChange={value => row.toggleSelected(!!value)}
+      aria-label="Select row"
+    />
+  )
+  ````
+  </Tab>
+</Tabs>
+
+### Add Selection Column
+
+Update your columns utility to include the selection column:
+
+```tsx title="app/bloggers/consts/bloggers-table-columns.const.tsx"
+"use client";
+
+import type { ColumnDef } from "@tanstack/react-table";
+import { format } from "date-fns";
+import { TableSelectAllCheckbox } from "@/app/components/ui/table/table-select-all-checkbox";
+import { TableSelectRowCheckbox } from "@/app/components/ui/table/table-select-row-checkbox";
+import { TableSortingButton } from "@/app/components/ui/table/table-sorting-button";
+import type { Blogger } from "../models/blogger.model";
+
+export const bloggersTableColumns: ColumnDef<Blogger>[] = [
+  {
+    id: "select",
+    header: ({ table }) => <TableSelectAllCheckbox table={table} />,
+    cell: ({ row }) => <TableSelectRowCheckbox row={row} />,
+    enableSorting: false,
+    enableHiding: false,
+  },
+  // ... rest of columns
+];
+```
+
+<Callout type="info">
+  Row selection is especially useful for bulk actions. In our example, we’ll
+  demonstrate how to use selected rows for bulk deletion. Again, this is simply
+  to show how you can access selected rows from outside the table.
+</Callout>
+
+---
+
+## Table Bulk Actions
+
+When you use stable row IDs (like actual data IDs instead of indexes), React Table can properly manage the selection state even when rows are deleted.
+
+<Tabs items={['Data Table', 'Bloggers Table']}>
+  <Tab value="Data Table">
+```tsx title="app/components/ui/table/data-table.tsx"
+interface DataTableProps<TData, TValue> {
+...
+rowId: keyof TData;
+}
+
+export const DataTable = <TData, TValue>({
+  ...
+  rowId,
+}: DataTableProps<TData, TValue>) => {
+  
+const table = useReactTable({
+,,,
+getRowId: (row) => String(row[rowId]),
+});
+
+// Notify parent when row selection changes
+useEffect(() => {
+if (onRowSelectionChange) {
+const selectedRows = table
+.getSelectedRowModel()
+.rows.map((row) => row.original);
+onRowSelectionChange(selectedRows);
+}
+}, [rowSelection, table, onRowSelectionChange]);
+
+...
+};
+
+````
+  </Tab>
+
+  <Tab value="Bloggers Table">
+```tsx title="app/bloggers/components/bloggers-table.tsx"
+export const BloggersTable = ({ data }: BloggersTableProps) => {
+  ...
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        // <BloggersFilterBar data={data} onFilter={setFilteredData} />
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={filteredData}
+        onRowSelectionChange={setSelectedBloggers}
+        rowId="id"
+      />
+    </div>
+  );
+};
+````
+
+  </Tab>
+</Tabs>
+
+---
+
+## Table Actions Column
+
+Most tables need an actions column for row-specific operations.
+This example demonstrates that, in most cases, you won’t define columns as a static array. Instead, you’ll likely create them using a utility — for example, to handle permissions for showing or hiding columns or defining dynamic actions.
+
+### New utility to get table columns
+
+```tsx title="app/bloggers/utils/get-bloggers-table-columns.util.tsx"
+"use client";
+
+import type { ColumnDef } from "@tanstack/react-table";
+import { format } from "date-fns";
+import { TableActionsCell } from "@/app/components/ui/table/table-actions-cell";
+import { TableSelectAllCheckbox } from "@/app/components/ui/table/table-select-all-checkbox";
+import { TableSelectRowCheckbox } from "@/app/components/ui/table/table-select-row-checkbox";
+import { TableSortingButton } from "@/app/components/ui/table/table-sorting-button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import type { Blogger } from "../models/blogger.model";
+
+export const getBloggersTableColumns = (): ColumnDef<Blogger>[] => {
+  return [
+    {
+      id: "select",
+      header: ({ table }) => <TableSelectAllCheckbox table={table} />,
+      cell: ({ row }) => <TableSelectRowCheckbox row={row} />,
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "name",
+      header: ({ column }) => (
+        <TableSortingButton column={column} label="Name" />
+      ),
+    },
+    {
+      accessorKey: "bio",
+      header: ({ column }) => (
+        <TableSortingButton column={column} label="Bio" />
+      ),
+    },
+    {
+      accessorKey: "createdAt",
+      header: ({ column }) => (
+        <TableSortingButton column={column} label="Created At" />
+      ),
+      cell: ({ row }) => {
+        const date = new Date(row.getValue("createdAt") as string);
+        return format(date, "PPP");
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <TableActionsCell>
+          <DropdownMenuItem>
+            <DropdownMenuItem>action item</DropdownMenuItem>
+          </DropdownMenuItem>
+        </TableActionsCell>
+      ),
+    },
+  ];
+};
+```
+
+<Callout type="info">
+  Notice that columns aren't just a static array—they're generated dynamically
+  by calling the `getBloggersTableColumns` function. This keeps your table
+  composable and flexible. You can pass permissions, different callbacks, or
+  other configuration to change which columns are visible.
+</Callout>
+
+### Generic Actions Cell Component
+
+```tsx title="app/components/ui/table/table-actions-cell.tsx"
+"use client";
+
+import { MoreVertical } from "lucide-react";
+import type { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+interface TableActionsCellProps {
+  children: ReactNode;
+}
+
+export const TableActionsCell = ({ children }: TableActionsCellProps) => {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0">
+          <span className="sr-only">Open menu</span>
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">{children}</DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+```
+
+### Update BloggersTable to call the utility
+
+```tsx title="app/bloggers/components/bloggers-table.tsx"
+"use client";
+
+import { useState } from "react";
+import { DataTable } from "@/app/components/ui/table/data-table";
+import type { Blogger } from "../models/blogger.model";
+import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util";
+
+interface BloggersTableProps {
+  data: Blogger[];
+}
+
+export const BloggersTable = ({ data }: BloggersTableProps) => {
+  const [filteredData, setFilteredData] = useState<Blogger[]>(data);
+
+  const columns = getBloggersTableColumns();
+
+  return (
+    <div>
+      // <BloggersFilterBar data={data} onFilter={setFilteredData} />
+      <DataTable columns={columns} data={filteredData} />
+    </div>
+  );
+};
+```
+
+---
+
+## Adding Pagination
+
+Pagination divides large datasets into manageable chunks. Add it to your `DataTable` component.
+
+### Update DataTable Component
+
+First, update your imports to include `getPaginationRowModel`:
+
+```typescript
+import { getPaginationRowModel } from "@tanstack/react-table";
+```
+
+Then update your `useReactTable` hook to include:
+
+```typescript
+getPaginationRowModel: getPaginationRowModel(),
+```
+
+And import and add the pagination component at the bottom (after the table, inside the div):
+
+```typescript
+import { TablePagination } from "./table-pagination";
+
+// Inside return JSX, after the table:
+<TablePagination table={table} />;
+```
+
+### Create Pagination Component
+
+First, create a constants file:
+
+```tsx title="app/components/ui/table/consts/default-table-per-page-options.const.ts"
+export const DEFAULT_TABLE_PER_PAGE_OPTIONS = [2, 5, 10, 20, 30, 40, 50];
+```
+
+Then create the pagination component:
+
+```tsx title="app/components/ui/table/table-pagination.tsx"
+import type { Table } from "@tanstack/react-table"
+import {
+  ArrowLeftCircleIcon,
+  ArrowRightCircleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select"
+import { DEFAULT_TABLE_PER_PAGE_OPTIONS } from "./consts/default-table-per-page-options.const"
+
+type TablePaginationProps<TData> = {
+  table: Table<TData>
+}
+
+export const TablePagination = <TData>({
+  table
+}: TablePaginationProps<TData>) => {
+  const canPreviousPage = table.getCanPreviousPage()
+  const canNextPage = table.getCanNextPage()
+  const pageIndex = table.getState().pagination.pageIndex
+  const pageSize = table.getState().pagination.pageSize
+
+  return (
+    <div className="flex items-center gap-4">
+      <div className="flex items-center space-x-2">
+        <p className="text-sm font-medium">Rows per page</p>
+        <Select
+          value={`${pageSize}`}
+          onValueChange={value => {
+            table.setPageSize(Number(value))
+          }}
+        >
+          <SelectTrigger className="h-8 w-auto">
+            <SelectValue placeholder={pageSize} />
+          </SelectTrigger>
+          <SelectContent side="top">
+            {DEFAULT_TABLE_PER_PAGE_OPTIONS.map(pageSize => (
+              <SelectItem
+                className="cursor-pointer"
+                key={pageSize}
+                value={`${pageSize}`}
+              >
+                {pageSize}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center justify-center text-sm font-medium">
+        Page{" "}
+        {pageIndex + 1 > table.getPageCount()
+          ? table.getPageCount()
+          : pageIndex + 1}{" "}
+        of {table.getPageCount()}
+      </div>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          className="h-8 w-8 p-0"
+          onClick={() => table.setPageIndex(0)}
+          disabled={!canPreviousPage || pageIndex + 1 > table.getPageCount()}
+        >
+          <span className="sr-only">Go to first page</span>
+          <ArrowLeftCircleIcon className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          className="h-8 w-8 p-0"
+          onClick={() => table.previousPage()}
+          disabled={!canPreviousPage || pageIndex + 1 > table.getPageCount()}
+        >
+          <span className="sr-only">Go to previous page</span>
+          <ChevronLeftIcon className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          className="h-8 w-8 p-0"
+          onClick={() => table.nextPage()}
+          disabled={!canNextPage}
+        >
+          <span className="sr-only">Go to next page</span>
+          <ChevronRightIcon className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          className="h-8 w-8 p-0"
+          onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+          disabled={!canNextPage}
+        >
+          <span className="sr-only">Go to last page</span>
+          <ArrowRightCircleIcon className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+## Adding Filtration
+
+**Important**: Filtering should happen **outside** the table component. Here's why:
+
+- ❌ Inside the table: Limited to text input, hard to add date pickers or complex filters, couples logic to UI
+- ✅ Outside the table: Flexible, composable, easy to add any filter type (text, date, select, range, etc.), filters are just state in the parent
+
+We could spend all day convincing you not to put filtration inside the table, but we won't. Just know that keeping it separate is the better approach.
+
+### Create Filter Bar and Date Picker(Bonus) Components
+
+<Tabs items={['Filter Component', 'Date Picker']}>
+  <Tab value="Filter Component">
+```tsx title="app/bloggers/components/bloggers-filter-bar.tsx"
+"use client"
+
+import { zodResolver } from "@hookform/resolvers/zod";
+// @ts-expect-error Butterfly has no types - Feel free to use the filtration mechanism of your choice
+import { applyFilters } from "butterfly-data-filters";
+import { Filter } from "lucide-react";
+import { useRef } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { DatePicker } from "@/app/components/ui/date-picker";
+import { Button } from "@/components/ui/button";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import type { Blogger } from "../models/blogger.model";
+
+// Schema for validation
+const filterSchema = z.object({
+name: z.string().optional(),
+bio: z.string().optional(),
+dateFrom: z.date().optional(),
+dateTo: z.date().optional()
+})
+
+type FilterInputs = z.infer<typeof filterSchema>
+
+interface BloggersFilterBarProps {
+data: Blogger[]
+onFilter: (filteredData: Blogger[]) => void
+}
+
+export const BloggersFilterBar = ({
+  data,
+  onFilter
+}: BloggersFilterBarProps) => {
+  const drawerCloseRef = useRef<HTMLButtonElement>(null)
+
+const form = useForm<FilterInputs>({
+resolver: zodResolver(filterSchema),
+defaultValues: {
+name: "",
+bio: "",
+dateFrom: undefined,
+dateTo: undefined
+}
+})
+
+const onSubmit = (values: FilterInputs) => {
+const filters = []
+
+    if (values.name?.trim()) {
+      filters.push({ field: "name", type: "string", value: values.name })
+    }
+
+    if (values.bio?.trim()) {
+      filters.push({ field: "bio", type: "string", value: values.bio })
+    }
+
+    if (values.dateFrom || values.dateTo) {
+      filters.push({
+        field: "createdAt",
+        type: "dateRange",
+        value: values.dateFrom && values.dateTo ? "custom" : "_any",
+        ...(values.dateFrom &&
+          values.dateTo && {
+            data: {
+              from: values.dateFrom.toISOString().split("T")[0],
+              until: values.dateTo.toISOString().split("T")[0]
+            }
+          })
+      })
+    }
+
+    const filteredData = applyFilters(filters, data)
+    onFilter(filteredData)
+    drawerCloseRef.current?.click()
+
+}
+
+const handleReset = () => {
+form.reset()
+}
+
+return (
+
+<Drawer direction="right">
+<DrawerTrigger asChild>
+<Button variant="outline" size="sm" className="gap-2">
+<Filter className="h-4 w-4" />
+Filters
+</Button>
+</DrawerTrigger>
+
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>Filter Bloggers</DrawerTitle>
+        </DrawerHeader>
+
+        <form
+          className="h-full"
+          onSubmit={form.handleSubmit(onSubmit)}
+          id="bloggers-filter-form"
+        >
+          <div className="flex flex-col gap-6 p-6">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                placeholder="Search by name..."
+                {...form.register("name")}
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="bio">Bio</Label>
+              <Input
+                id="bio"
+                placeholder="Search by bio..."
+                {...form.register("bio")}
+              />
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <span className="text-sm font-medium">Created Date Range</span>
+              <div className="flex gap-2 flex-wrap">
+                <DatePicker
+                  id="date-from"
+                  date={form.watch("dateFrom")}
+                  setDate={date => form.setValue("dateFrom", date)}
+                  placeholder="From"
+                />
+                <DatePicker
+                  id="date-to"
+                  date={form.watch("dateTo")}
+                  setDate={date => form.setValue("dateTo", date)}
+                  placeholder="To"
+                />
+              </div>
+            </div>
+          </div>
+        </form>
+        <DrawerFooter className="mt-auto">
+          <Button form="bloggers-filter-form" type="submit">
+            Apply Filters
+          </Button>
+          <Button type="button" variant="outline" onClick={handleReset}>
+            Reset
+          </Button>
+          <DrawerClose ref={drawerCloseRef} asChild>
+            <Button variant="ghost">Cancel</Button>
+          </DrawerClose>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+
+)
+}
+
+````
+
+  </Tab>
+
+  <Tab value="Date Picker">
+```tsx title="app/components/ui/date-picker.tsx"
+"use client"
+
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+
+interface DatePickerProps {
+date: Date | undefined
+setDate: (date: Date | undefined) => void
+placeholder?: string
+id?: string
+}
+
+export const DatePicker = ({
+  date,
+  setDate,
+  placeholder = "Pick a date",
+  id
+}: DatePickerProps) => {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant={"outline"}
+          className={cn(
+            "w-full justify-start text-left font-normal",
+            !date && "text-muted-foreground"
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {date ? format(date, "PPP") : <span>{placeholder}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          id={id}
+          mode="single"
+          selected={date}
+          onSelect={setDate}
+          autoFocus
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+````
+
+  </Tab>
+</Tabs>
+
+<Callout type="warn">
+  We're using `butterfly-data-filters` library for simplicity in this example.
+  However, we don't recommend it for production applications. Instead, implement
+  filtering logic that better suits your needs. The important pattern here is
+  keeping filtering external to the table component.
+</Callout>
+
+### Update BloggersTable to include the filter bar
+
+```tsx title="app/bloggers/components/bloggers-table.tsx"
+"use client";
+
+import { useState } from "react";
+import { DataTable } from "@/app/components/ui/table/data-table";
+import type { Blogger } from "../models/blogger.model";
+import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util";
+import { BloggersFilterBar } from "./bloggers-filter-bar";
+
+interface BloggersTableProps {
+  data: Blogger[];
+}
+
+export const BloggersTable = ({ data }: BloggersTableProps) => {
+  const [filteredData, setFilteredData] = useState<Blogger[]>(data);
+
+  const columns = getBloggersTableColumns();
+
+  return (
+    <div className="flex flex-col gap-4">
+      <BloggersFilterBar data={data} onFilter={setFilteredData} />
+      <DataTable columns={columns} data={filteredData} />
+    </div>
+  );
+};
+```
+
+---
+
+## URL Params Synchronization
+
+To synchronize the filter state with the URL, we'll use the `nuqs` library. Type-safe search params
+state manager for React
+
+### Install nuqs
+
+First, install the package:
+
+```npm
+npm install nuqs
+```
+
+### Wrap app children with nuqs adapter
+
+```tsx title="app/layout.tsx"
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Create Next App",
+  description: "Generated by create next app",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased dark`}
+      >
+        <NuqsAdapter>{children}</NuqsAdapter>
+      </body>
+    </html>
+  );
+}
+```
+
+### Create Some hooks to make use of nuqs
+
+<Tabs items={["useTableSorting", "useTableUrlState", "useTablePagination"]}>
+<Tab value="useTableSorting">
+```ts title="app/components/ui/table/hooks/use-table-sorting.ts"
+import type { SortingState, Updater } from "@tanstack/react-table";
+import { useTableUrlState } from "./use-table-url-state";
+
+/\*_ nuqs Hook for managing table sorting state via URL parameters _/
+// sortParamName: the name of the URL parameter to use for sorting (default: "sort") - Because multiple tables may exist on the same page
+export const useTableSorting = (sortParamName = "sort") => {
+const [urlState, setUrlState] = useTableUrlState({
+sortParamName,
+});
+const sorting = urlState[sortParamName] as SortingState;
+
+const setSorting = (updater: Updater<SortingState>) => {
+const newSorting =
+typeof updater === "function" ? updater(sorting) : updater;
+setUrlState({ [sortParamName]: newSorting });
+};
+
+return { sorting, setSorting };
+};
+
+````
+
+</Tab>
+
+<Tab value="useTableUrlState">
+```ts title="app/components/ui/table/hooks/use-table-url-state.ts"
+"use client";
+
+import { parseAsInteger, useQueryStates } from "nuqs";
+import { DEFAULT_TABLE_PAGE_INDEX_VALUE } from "../consts/default-table-page-index-value.const";
+import { DEFAULT_TABLE_PER_PAGE_VALUE } from "../consts/default-table-per-page-value.const";
+import { sortParser } from "../utils/sort-parser.util";
+import { pageParser } from "../utils/page-parser.util";
+
+const tableUrlStateSchema = ({
+sortParamName = "sort",
+pageParamName = "page",
+pageSizeParamName = "pageSize",
+}) => ({
+[pageParamName]: pageParser.withDefault(DEFAULT_TABLE_PAGE_INDEX_VALUE),
+[pageSizeParamName]: parseAsInteger.withDefault(DEFAULT_TABLE_PER_PAGE_VALUE),
+[sortParamName]: sortParser.withDefault([]),
+});
+
+export const useTableUrlState = ({
+  sortParamName = "sort",
+  pageParamName = "page",
+  pageSizeParamName = "pageSize",
+}) =>
+  useQueryStates(
+    tableUrlStateSchema({
+      sortParamName,
+      pageParamName,
+      pageSizeParamName,
+    }),
+    {
+      history: "replace",
+    }
+  );
+
+````
+
+</Tab>
+<Tab value="useTablePagination">
+```ts title="app/components/ui/table/hooks/use-table-pagination.ts"
+import type { PaginationState, Updater } from "@tanstack/react-table";
+import { useTableUrlState } from "./use-table-url-state";
+
+export const useTablePagination = (page = "page", pageSize = "pageSize") => {
+const [urlState, setUrlState] = useTableUrlState({
+pageParamName: page,
+pageSizeParamName: pageSize,
+});
+const pagination = {
+pageIndex: urlState[page],
+pageSize: urlState[pageSize],
+} as PaginationState;
+
+const setPagination = (updater: Updater<PaginationState>) => {
+const newPagination =
+typeof updater === "function" ? updater(pagination) : updater;
+setUrlState({
+[page]: newPagination.pageIndex,
+[pageSize]: newPagination.pageSize,
+});
+};
+
+return { pagination, setPagination };
+};
+
+````
+</Tab>
+</Tabs>
+
+### Create Shared Filter Utility
+
+We'll move the filtering logic to a separate utility file so it can be reused on both the client and server.
+
+```ts title="app/bloggers/utils/filter-bloggers.ts"
+// @ts-expect-error Butterfly has no types
+import { applyFilters } from "butterfly-data-filters";
+import type { FilterInputs } from "../components/bloggers-filter-bar";
+import type { Blogger } from "../models/blogger.model";
+
+type FilterProps = Omit<FilterInputs, "dateFrom" | "dateTo"> & {
+  dateFrom?: string | null;
+  dateTo?: string | null;
+};
+export const filterBloggers = (values: FilterProps, data: Blogger[]) => {
+  const filters = [];
+
+  if (values.name?.trim()) {
+    filters.push({ field: "name", type: "string", value: values.name });
+  }
+
+  if (values.bio?.trim()) {
+    filters.push({ field: "bio", type: "string", value: values.bio });
+  }
+  if (values.dateFrom || values.dateTo) {
+    const from = values.dateFrom;
+    const until = values.dateTo;
+
+    filters.push({
+      field: "createdAt",
+      type: "dateRange",
+      value: values.dateFrom || values.dateTo ? "custom" : "_any",
+      ...(from || until
+        ? {
+            data: {
+              from,
+              until,
+            },
+          }
+        : {}),
+    });
+  }
+
+  return applyFilters(filters, data) as Blogger[];
+};
+````
+
+### Update Bloggers Page Component to filter data based on URL params (server-side)
+
+```tsx title="app/bloggers/page.tsx"
+import { BloggersTable } from "./components/bloggers-table";
+import type { Blogger } from "./models/blogger.model";
+import { filterBloggers } from "./utils/filter-bloggers";
+
+export const revalidate = false;
+
+async function getData(): Promise<Blogger[]> {
+  const bloggers = (await import("@/data/bloggers.json")).default;
+  return bloggers;
+}
+
+export const metadata = {
+  title: "Bloggers",
+  description: "View all bloggers",
+};
+
+type PageSearchParams = {
+  name?: string;
+  bio?: string;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export default async function BloggersPage({
+  searchParams,
+}: {
+  searchParams: Promise<PageSearchParams>;
+}) {
+  const values = await searchParams;
+  const data = await getData();
+
+  const filteredData = filterBloggers(values, data);
+
+  return (
+    <div className="container mx-auto py-10">
+      <BloggersTable data={data} filteredData={filteredData} />
+    </div>
+  );
+}
+```
+
+### Create URL State Hooks
+
+<Tabs items={["useTableUrlState","useBloggersUrlState", "pageParser", "sortParser"]}>
+<Tab value="useTableUrlState">
+```ts title="app/bloggers/hooks/use-table-url-state.ts"
+"use client";
+
+import { parseAsInteger, useQueryStates } from "nuqs";
+import { DEFAULT_TABLE_PAGE_INDEX_VALUE } from "../consts/default-table-page-index-value.const"; // 0
+import { DEFAULT_TABLE_PER_PAGE_VALUE } from "../consts/default-table-per-page-value.const";
+import { sortParser } from "../utils/sort-parser.util";
+import { pageParser } from "../utils/page-parser.util";
+
+const tableUrlStateSchema = ({
+sortParamName = "sort",
+pageParamName = "page",
+pageSizeParamName = "pageSize",
+}) => ({
+[pageParamName]: pageParser.withDefault(DEFAULT_TABLE_PAGE_INDEX_VALUE),
+[pageSizeParamName]: parseAsInteger.withDefault(DEFAULT_TABLE_PER_PAGE_VALUE), // As you wish, maybe 10 or 20
+[sortParamName]: sortParser.withDefault([]),
+});
+
+export const useTableUrlState = ({
+  sortParamName = "sort",
+  pageParamName = "page",
+  pageSizeParamName = "pageSize",
+}) =>
+  useQueryStates(
+    tableUrlStateSchema({
+      sortParamName,
+      pageParamName,
+      pageSizeParamName,
+    }),
+    {
+      history: "replace",
+    }
+  );
+
+````
+</Tab>
+<Tab value="useBloggersUrlState">
+```ts title="app/bloggers/hooks/use-bloggers-url-state.ts"
+"use client";
+
+import { parseAsString, useQueryStates } from "nuqs";
+
+export const bloggersUrlStateSchema = {
+  name: parseAsString.withDefault(""),
+  bio: parseAsString.withDefault(""),
+  dateFrom: parseAsString.withDefault(""),
+  dateTo: parseAsString.withDefault(""),
+};
+
+export const useBloggersUrlState = () =>
+  useQueryStates(bloggersUrlStateSchema, {
+    history: "replace",
+  });
+````
+
+</Tab>
+<Tab value="pageParser">
+```ts title="app/components/ui/table/utils/page-parser.util.ts"
+import { createParser } from "nuqs";
+
+// Maps pageIndex 0 tp page number 1 and vice versa.
+export const pageParser = createParser<number>({
+// FROM URL TO STATE
+parse: (queryValue: string) => {
+const pageNumber = parseInt(queryValue, 10);
+return Number.isNaN(pageNumber) || pageNumber < 1 ? 0 : pageNumber - 1;
+},
+// FROM STATE TO URL
+serialize: (value: number): string => {
+return (value + 1).toString();
+},
+// eq is optional but recommended for comparing default state
+eq: (a: number, b: number): boolean => a === b,
+});
+
+````
+</Tab>
+<Tab value="sortParser">
+```ts title="app/components/ui/table/utils/sort-parser.util.ts"
+import type { SortingState } from "@tanstack/react-table";
+import { createParser } from "nuqs";
+
+export const sortParser = createParser<SortingState>({
+  // FROM URL TO STATE
+  parse(queryValue: string) {
+    // e.g. "createdAt:asc,name:desc" => [{id: "createdAt", desc: false}, {id: "name", desc: true}]
+    if (!queryValue) return [];
+    return queryValue.split(",").map((pair) => {
+      const [id, dir] = pair.split(":");
+      return { id, desc: dir === "desc" };
+    });
+  },
+  // FROM STATE TO URL
+  // e.g. [{id: "createdAt", desc: false}, {id: "name", desc: true}] => "createdAt:asc,name:desc"
+  serialize(value: SortingState): string {
+    if (!value || value.length === 0) return "";
+    return value.map((s) => `${s.id}:${s.desc ? "desc" : "asc"}`).join(",");
+  },
+  // eq is optional but recommended for comparing default state
+  eq(a: SortingState, b: SortingState): boolean {
+    if (a.length !== b.length) return false;
+    return a.every((s, i) => {
+      const t = b[i];
+      return s.id === t.id && s.desc === t.desc;
+    });
+  },
+});
+
+
+````
+
+</Tab>
+</Tabs>
+
+### Update DataTable Component
+
+```tsx title="app/components/ui/table/data-table.tsx"
+"use client";
+
+import {
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  type SortingState,
+  useReactTable,
+  PaginationState,
+} from "@tanstack/react-table";
+import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { TablePagination } from "./table-pagination";
+
+interface DataTableProps<TData, TValue> {
+  columns: ColumnDef<TData, TValue>[];
+  data: TData[];
+  onRowSelectionChange?: (selectedRows: TData[]) => void;
+  rowId: keyof TData;
+
+  sorting: SortingState;
+  setSorting: Dispatch<SetStateAction<SortingState>>;
+
+  setPagination: (updater: SetStateAction<PaginationState>) => void;
+  pagination: PaginationState;
+}
+
+export const DataTable = <TData, TValue>({
+  columns,
+  data,
+  onRowSelectionChange,
+  rowId,
+
+  sorting,
+  setSorting,
+
+  setPagination,
+  pagination,
+}: DataTableProps<TData, TValue>) => {
+  const [rowSelection, setRowSelection] = useState({});
+
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSorting,
+    getPaginationRowModel: getPaginationRowModel(),
+    onRowSelectionChange: setRowSelection,
+    onPaginationChange: setPagination,
+    state: {
+      sorting,
+      rowSelection,
+      pagination: pagination,
+    },
+    getRowId: (row) => String(row[rowId]),
+  });
+
+  // Notify parent when row selection changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Iam depending on rowSelection
+  useEffect(() => {
+    if (onRowSelectionChange) {
+      const selectedRows = table
+        .getSelectedRowModel()
+        .rows.map((row) => row.original);
+      onRowSelectionChange(selectedRows);
+    }
+  }, [rowSelection, table, onRowSelectionChange]);
+
+  const selectedRowsCount = table.getFilteredSelectedRowModel().rows.length;
+  const rowsCount = table.getFilteredRowModel().rows.length;
+
+  return (
+    <div>
+      <div className="overflow-hidden rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  return (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  No results.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      <div className="flex justify-between items-center py-2">
+        <div className="text-muted-foreground flex-1 text-sm">
+          {selectedRowsCount} of {rowsCount} row(s) selected.
+        </div>
+
+        <TablePagination table={table} />
+      </div>
+    </div>
+  );
+};
+```
+
+### update bloggers table
+
+```tsx title="app/bloggers/components/bloggers-table.tsx"
+"use client";
+
+import { Trash2 } from "lucide-react";
+import { useState } from "react";
+import { DataTable } from "@/app/components/ui/table/data-table";
+import { Button } from "@/components/ui/button";
+import type { Blogger } from "../models/blogger.model";
+import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util";
+import { BloggersFilterBar } from "./bloggers-filter-bar";
+import { useTableSorting } from "@/app/components/ui/table/hooks/use-table-sorting";
+import { useTablePagination } from "@/app/components/ui/table/hooks/use-table-pagination";
+
+interface BloggersTableProps {
+  data: Blogger[];
+  filteredData: Blogger[];
+}
+
+export const BloggersTable = ({ data, filteredData }: BloggersTableProps) => {
+  const [finalData, setfinalData] = useState<Blogger[]>(filteredData);
+  const [selectedBloggers, setSelectedBloggers] = useState<Blogger[]>([]);
+  // We are managing pagination and sorting from outside because we might add 2 tables inside one page - We need to pass different param names
+  const { sorting, setSorting } = useTableSorting();
+  const { pagination, setPagination } = useTablePagination();
+
+  const columns = getBloggersTableColumns();
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <BloggersFilterBar data={data} onFilter={setfinalData} />
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={finalData}
+        onRowSelectionChange={setSelectedBloggers}
+        rowId="id"
+        sorting={sorting}
+        setSorting={setSorting}
+        pagination={pagination}
+        setPagination={setPagination}
+      />
+    </div>
+  );
+};
+```
+
+### Update Filter Bar Component
+
+Now, let's update the `BloggersFilterBar` to use our new hook and utility.
+
+> **Note:** The date filtration logic shown here is for demonstration purposes. In a production application, you might want to handle date objects and timezones more robustly depending on your requirements.
+
+```tsx title="app/bloggers/components/bloggers-filter-bar.tsx"
+// app/bloggers/components/bloggers-filter-bar.tsx
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Filter } from "lucide-react";
+import { useRef } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { DatePicker } from "@/app/components/ui/date-picker";
+import { Button } from "@/components/ui/button";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useBloggersUrlState } from "../hooks/use-bloggers-url-state";
+import type { Blogger } from "../models/blogger.model";
+import { filterBloggers } from "../utils/filter-bloggers";
+
+const filterSchema = z.object({
+  name: z.string().optional(),
+  bio: z.string().optional(),
+  dateFrom: z.date().nullable().optional(),
+  dateTo: z.date().nullable().optional(),
+});
+
+export type FilterInputs = z.infer<typeof filterSchema>;
+
+interface BloggersFilterBarProps {
+  data: Blogger[];
+  onFilter: (filteredData: Blogger[]) => void;
+}
+
+function toUTCStartOfLocalDay(date: Date) {
+  const localYear = date.getFullYear();
+  const localMonth = date.getMonth();
+  const localDay = date.getDate();
+
+  const dLocalMidnight = new Date(localYear, localMonth, localDay, 0, 0, 0, 0);
+  return dLocalMidnight.toISOString();
+}
+
+function toUTCEndOfLocalDay(date: Date) {
+  const localYear = date.getFullYear();
+  const localMonth = date.getMonth();
+  const localDay = date.getDate();
+
+  const dLocalEnd = new Date(localYear, localMonth, localDay, 23, 59, 59, 999);
+  return dLocalEnd.toISOString();
+}
+
+const parseUTCDate = (isoString: string | null) => {
+  if (!isoString) return null;
+  const date = new Date(isoString);
+  return new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds()
+    )
+  );
+};
+
+export const BloggersFilterBar = ({
+  onFilter,
+  data,
+}: BloggersFilterBarProps) => {
+  const drawerCloseRef = useRef<HTMLButtonElement>(null);
+  const [query, setQuery] = useBloggersUrlState();
+  const filtersAppliedCount = Object.values(query).filter(
+    (value) => value !== undefined && value !== null && value !== ""
+  ).length;
+
+  const form = useForm<FilterInputs>({
+    resolver: zodResolver(filterSchema),
+    defaultValues: {
+      ...query,
+      dateFrom: query.dateFrom ? parseUTCDate(query.dateFrom) : null,
+      dateTo: query.dateTo ? parseUTCDate(query.dateTo) : null,
+    },
+  });
+
+  const onSubmit = (values: FilterInputs) => {
+    setQuery({
+      ...values,
+      dateFrom: values.dateFrom ? values.dateFrom.toISOString() : "",
+      dateTo: values.dateTo ? toUTCEndOfLocalDay(values.dateTo) : "",
+    });
+
+    const filteredData = filterBloggers(
+      {
+        ...values,
+        dateFrom: values.dateFrom ? toUTCStartOfLocalDay(values.dateFrom) : "",
+        dateTo: values.dateTo ? toUTCEndOfLocalDay(values.dateTo) : "",
+      },
+      data
+    );
+    onFilter(filteredData);
+    drawerCloseRef.current?.click();
+  };
+
+  const handleReset = () => {
+    form.reset();
+  };
+
+  function handleClear(): void {
+    form.reset({
+      bio: "",
+      dateFrom: null,
+      dateTo: null,
+      name: "",
+    });
+  }
+  return (
+    <Drawer direction="right">
+      <DrawerTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2 cursor-pointer">
+          <Filter className="h-4 w-4" />
+          <div>
+            Filters{" "}
+            {filtersAppliedCount > 0 && (
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-xs font-semibold text-white">
+                {filtersAppliedCount}
+              </span>
+            )}
+          </div>
+        </Button>
+      </DrawerTrigger>
+
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>Filter Bloggers</DrawerTitle>
+        </DrawerHeader>
+
+        <form
+          className="h-full"
+          onSubmit={form.handleSubmit(onSubmit)}
+          id="bloggers-filter-form"
+        >
+          <div className="flex flex-col gap-6 p-6">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                placeholder="Search by name..."
+                {...form.register("name")}
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="bio">Bio</Label>
+              <Input
+                id="bio"
+                placeholder="Search by bio..."
+                {...form.register("bio")}
+              />
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <span className="text-sm font-medium">Created Date Range</span>
+              <div className="flex gap-2 flex-wrap">
+                <DatePicker
+                  id="date-from"
+                  date={form.watch("dateFrom") ?? undefined}
+                  setDate={(date) => {
+                    console.log(date);
+                    console.log(date?.toUTCString());
+                    form.setValue("dateFrom", date);
+                  }}
+                  placeholder="From"
+                />
+
+                <DatePicker
+                  id="date-to"
+                  date={form.watch("dateTo") ?? undefined}
+                  setDate={(date) => form.setValue("dateTo", date)}
+                  placeholder="To"
+                />
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <DrawerFooter className="mt-auto">
+          <Button
+            className="cursor-pointer"
+            form="bloggers-filter-form"
+            type="submit"
+          >
+            Apply Filters
+          </Button>
+          {/* RESET now resets to the default where we might have default values as non-empty values */}
+          <Button
+            className="cursor-pointer"
+            type="button"
+            variant="outline"
+            onClick={handleReset}
+          >
+            Reset
+          </Button>
+          <Button
+            className="cursor-pointer"
+            type="button"
+            variant="secondary"
+            onClick={handleClear}
+          >
+            Clear
+          </Button>
+          <DrawerClose className="cursor-pointer" ref={drawerCloseRef} asChild>
+            <Button variant="ghost">Cancel</Button>
+          </DrawerClose>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+  );
+};
+```
+
+---
+
+## Try out the Table
+
+You can explore the live demo or check the code below:
+
+<div className="flex flex-col gap-3 not-prose">
+  <a
+    href="https://codesandbox.io/p/devbox/g6dfsv"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted transition"
+  >
+    💻 View Code on CodeSandbox
+  </a>
+
+  <iframe
+    src="https://g6dfsv-3000.csb.app/bloggers"
+    style={{
+      width: '100%',
+      height: '500px',
+      border: '1px solid #333',
+      borderRadius: '8px',
+      overflow: 'hidden',
+    }}
+    title="Table Demo - Client Data (No URL Params)"
+    sandbox="allow-scripts allow-same-origin allow-modals allow-popups allow-presentation"
+  />
+</div>
+---
+## Next Step:
+
+[Server-side data table](/docs/components/table/server-data)

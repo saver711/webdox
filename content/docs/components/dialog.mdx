@@ -1,0 +1,412 @@
+---
+title: 'Dialog & Modal'
+description: 'A fast, production-ready dialog solution for React/Next.js that works with any UI library.'
+---
+
+---
+
+## Understanding the Basics
+
+**Dialog**: A generic overlay window that appears above page content.
+
+**Modal**: A specific type of dialog that **blocks all interaction** with the underlying page using a backdrop overlay.
+
+**Key takeaway**: All modals are dialogs, but not all dialogs are modals. In practice, we mostly use modal dialogs.
+
+---
+
+## Universal Concept
+
+**This pattern works with ANY UI library** - shadcn/ui, Radix UI, Headless UI, Material-UI, Chakra UI, Mantine, or even your custom dialog component.
+
+The core concepts remain the same across all libraries:
+1. **Use declarative state** (`useState`) - React's recommended approach
+2. **Control open/close** via props (naming may vary: `open`, `isOpen`, `show`, etc.)
+3. **Handle the form portal problem** with `id` and `form` attributes
+
+We'll use **shadcn/ui** as an example below. While **component names and structure differ** between libraries (e.g., Material-UI uses `DialogActions`, Headless UI uses `DialogPanel`), the **core concepts and patterns** remain identical.
+
+---
+
+## Controlled vs Uncontrolled
+
+There are two approaches to managing dialogs:
+
+### 1. Controlled (Recommended) ✅
+
+You manage the `open` state with `useState` in your component. This gives you **full programmatic control**.
+
+**Use this when you need to:**
+- Close the dialog after an API call succeeds
+- Open the dialog from multiple places
+- Validate before closing
+- Track dialog state in your app
+
+```tsx
+const [open, setOpen] = useState(false);
+
+// You control when it opens/closes
+const handleSubmit = async () => {
+  await saveData();
+  setOpen(false); // Close programmatically
+};
+
+<Dialog open={open} onOpenChange={setOpen}>
+```
+
+### 2. Uncontrolled (Simple cases)
+
+The dialog manages its own state internally using `<DialogTrigger>`. Simpler but **no programmatic control**.
+
+```tsx
+<Dialog>
+  <DialogTrigger asChild>
+    <button>Open</button>
+  </DialogTrigger>
+  <DialogContent>
+    {/* No way to close this programmatically from outside */}
+  </DialogContent>
+</Dialog>
+```
+
+**Limitation**: You can't close it from your code (e.g., after a successful form submission).
+
+**Our reusable component uses the Controlled approach** because it's more flexible and covers most real-world scenarios.
+
+---
+
+## The Form Portal Problem ⚠️
+
+**This affects ALL dialog libraries** that use portals (Radix, Headless UI, Material-UI, etc.)
+
+**The Issue**: When you have a form with a submit button inside the dialog, the button won't trigger the form submission.
+
+**Why?** The `<form>` is in your component, but the submit button renders in a **portal** (different DOM location). HTML forms only detect buttons that are direct descendants.
+
+### ❌ This Doesn't Work
+
+```tsx
+<form onSubmit={handleSubmit}> {/* This won't excute the code in the `handleSubmit` handler */}
+  <Dialog>
+    <DialogContent>
+      <input type="text" />
+      <button type="submit">Submit</button> {/* Won't work! */}
+    </DialogContent>
+  </Dialog>
+</form>
+```
+
+### ✅ Universal Solution
+
+Link the form and button using HTML5 `id` and `form` attributes:
+
+```tsx
+<form id="my-form" onSubmit={handleSubmit}>
+  {/* form fields */}
+</form>
+
+<DialogFooter>
+  <button type="submit" form="my-form">Submit</button>
+</DialogFooter>
+```
+
+**This solution works with every dialog library** - it's pure HTML5!
+
+---
+
+## Setup (shadcn example)
+
+```npm
+npx shadcn@latest add dialog
+```
+
+> **Note**: For other UI libraries (Headless UI, Material-UI, Chakra, etc.), follow their installation docs. The core concepts remain the same.
+
+---
+
+## Reusable Dialog Component
+
+Here's a clean, reusable component following React's **declarative approach**:
+
+```tsx title="components/ReusableDialog.tsx"
+"use client";
+
+import { ReactNode } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+type ReusableDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description?: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  className?: string;
+};
+
+export function ReusableDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  children,
+  footer,
+  className,
+}: ReusableDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={className}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description && (
+            <DialogDescription>{description}</DialogDescription>
+          )}
+        </DialogHeader>
+
+        <div className="py-4">{children}</div>
+
+        {footer && <DialogFooter>{footer}</DialogFooter>}
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+> **Using another library?** The **core concepts** (declarative state, form portal solution) remain the same, but you'll need to adapt the component structure to match your library's API (component names, props, and structure differ between libraries).
+
+---
+
+## Usage Examples
+
+### Basic Usage
+
+```tsx title="app/page.tsx"
+"use client";
+
+import { useState } from "react";
+import { ReusableDialog } from "@/components/ReusableDialog";
+
+export default function Page() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>Open Dialog</button>
+
+      <ReusableDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Dialog Title"
+        description="This is the dialog description."
+        footer={
+          <button onClick={() => setOpen(false)}>Close</button>
+        }
+      >
+        <p>Your content here...</p>
+      </ReusableDialog>
+    </>
+  );
+}
+```
+
+### With Form (Portal Solution)
+
+```tsx title="app/form-page.tsx"
+"use client";
+
+import { useState } from "react";
+import { ReusableDialog } from "@/components/ReusableDialog";
+
+export default function FormPage() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Submitted:", name);
+    setOpen(false);
+    setName("");
+  };
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>Open Form</button>
+
+      <ReusableDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Enter Your Name"
+        footer={
+          <>
+            <button onClick={() => setOpen(false)}>Cancel</button>
+            {/* Link to form using HTML5 'form' attribute */}
+            <button type="submit" form="name-form">
+              Submit
+            </button>
+          </>
+        }
+      >
+        {/* Form with unique ID */}
+        <form id="name-form" onSubmit={handleSubmit}>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            className="w-full p-2 border rounded"
+            required
+          />
+        </form>
+      </ReusableDialog>
+    </>
+  );
+}
+```
+
+---
+
+## Testing (Vitest)
+
+Here are comprehensive tests for the reusable component. Create a test file next to your component:
+
+```tsx title="components/ReusableDialog.test.tsx"
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { ReusableDialog } from './ReusableDialog';
+
+describe('ReusableDialog', () => {
+  it('renders when open is true', () => {
+    render(
+      <ReusableDialog
+        open={true}
+        onOpenChange={() => {}}
+        title="Test Dialog"
+        description="Test description"
+      >
+        <p>Dialog content</p>
+      </ReusableDialog>
+    );
+
+    expect(screen.getByText('Test Dialog')).toBeInTheDocument();
+    expect(screen.getByText('Test description')).toBeInTheDocument();
+    expect(screen.getByText('Dialog content')).toBeInTheDocument();
+  });
+
+  it('does not render when open is false', () => {
+    render(
+      <ReusableDialog
+        open={false}
+        onOpenChange={() => {}}
+        title="Test Dialog"
+      >
+        <p>Dialog content</p>
+      </ReusableDialog>
+    );
+
+    expect(screen.queryByText('Test Dialog')).not.toBeInTheDocument();
+  });
+
+  it('calls onOpenChange when closed', async () => {
+    const onOpenChange = vi.fn();
+    
+    render(
+      <ReusableDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        title="Test Dialog"
+      >
+        <p>Dialog content</p>
+      </ReusableDialog>
+    );
+
+    const closeButton = screen.getByRole('button', { name: /close/i });
+    await userEvent.click(closeButton);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('renders footer content', () => {
+    render(
+      <ReusableDialog
+        open={true}
+        onOpenChange={() => {}}
+        title="Test Dialog"
+        footer={
+          <button>Custom Footer Button</button>
+        }
+      >
+        <p>Dialog content</p>
+      </ReusableDialog>
+    );
+
+    expect(screen.getByText('Custom Footer Button')).toBeInTheDocument();
+  });
+
+  it('handles form submission with portal solution', async () => {
+    const handleSubmit = vi.fn((e) => e.preventDefault());
+    
+    render(
+      <ReusableDialog
+        open={true}
+        onOpenChange={() => {}}
+        title="Form Dialog"
+        footer={
+          <button type="submit" form="test-form">
+            Submit
+          </button>
+        }
+      >
+        <form id="test-form" onSubmit={handleSubmit}>
+          <input type="text" placeholder="Name" />
+        </form>
+      </ReusableDialog>
+    );
+
+    const submitButton = screen.getByText('Submit');
+    await userEvent.click(submitButton);
+
+    expect(handleSubmit).toHaveBeenCalled();
+  });
+
+  it('handles ESC key press', async () => {
+    const onOpenChange = vi.fn();
+    
+    render(
+      <ReusableDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        title="Test Dialog"
+      >
+        <p>Content</p>
+      </ReusableDialog>
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+});
+```
+
+---
+
+
+## Key Points
+
+✅ **Universal pattern** - Works with any dialog library (shadcn/ui, Headless UI, Material-UI, Chakra, Mantine, etc.)  
+✅ **Use `useState`** - React's recommended declarative approach (Controlled)  
+✅ **Form portal fix** - HTML5 solution with `id` and `form` attributes (works everywhere!)  
+✅ **Library agnostic** - Same core concepts, adapt structure to your library's API  
+✅ **Customizable** - Adjust the component as needed for your project  
+
+**The concept is universal. The library is your choice.**

@@ -1,0 +1,27 @@
+name: "Setup"
+description: "Checkout, setup Node + pnpm, and optionally install dependencies"
+
+inputs:
+  install-deps:
+    description: "Whether to install dependencies"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: latest
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+        cache: pnpm
+
+    - name: Install dependencies
+      if: inputs.install-deps == 'true'
+      run: pnpm install --frozen-lockfile
+      shell: bash

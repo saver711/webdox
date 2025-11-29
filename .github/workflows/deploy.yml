@@ -1,0 +1,48 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Free up disk space
+        run: |
+          docker system prune -af || true
+          docker volume prune -f || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          df -h
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build Docker image (runner stage)
+        run: docker build --target runner -t ahmedhassan711/webdox-app:latest .
+
+      - name: Push image to Docker Hub
+        run: docker push ahmedhassan711/webdox-app:latest
+
+  deploy:
+    needs: build
+    runs-on: self-hosted # GitHub Actions runner installed on your EC2
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Free disk space on EC2
+        run: |
+          docker system prune -af || true
+          docker volume prune -f || true
+          docker builder prune -af || true
+          df -h
+      - name: Pull latest image
+        run: docker-compose -f docker-compose.prod.yml pull
+
+      - name: Restart container with new image
+        run: docker-compose -f docker-compose.prod.yml up -d

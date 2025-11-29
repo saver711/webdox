@@ -1,0 +1,46 @@
+---
+title: Data Table
+description: Building accessible, scalable tables with best practices
+---
+
+> Shadcn is used here **as an example**.  
+> You can apply the same best practices to any other component library like MUI, Chakra UI, or custom setups.
+
+
+## Table Overview
+
+**Data tables** are one of the most common UI components in web applications. However, most component libraries provide only basic table components without real-world examples that show how to integrate them with pagination, sorting, filtering, and backend data.
+This section covers best practices for building reusable, maintainable data tables that work in real applications.
+
+---
+
+## Key Principles
+
+### Separation of Concerns
+
+The table component should be purely presentational. The table receives data and emits events.
+
+### Composability
+
+Allow replacing parts like headers, cells, and empty states. shadcn's column definition pattern already supports this via custom render functions.
+
+### Type Safety
+
+Use TypeScript generics to type rows and columns. This ensures compile-time safety and better IDE support.
+
+### External Integration
+
+The table component never fetches data. It accepts pre-fetched data and handlers from the parent.
+
+---
+
+## Examples
+
+<div className="flex flex-col gap-3 mt-6">
+  <a href="/docs/components/table/client-data" className="underline text-primary hover:text-primary/80">
+    Client-side data table →
+  </a>
+  <a href="/docs/components/table/server-data" className="underline text-primary hover:text-primary/80">
+    Server-side data table →
+  </a>
+</div>

@@ -1,0 +1,12 @@
+{
+	"display": false,
+	"pages": [
+		"components",
+		"---My Separator---",
+		"...folder",
+		"...",
+		"file",
+		"!otherFolder",
+		"[Shadcn](https://ui.shadcn.com/docs/installation/next)"
+	]
+}
