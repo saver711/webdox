@@ -1,0 +1,120 @@
+---
+title: "Authentication & Authorization"
+description: "Production-ready authentication patterns for React and Next.js applications."
+---
+
+---
+
+## What You'll Learn
+
+Secure authentication implementation for modern web applications. No theory, just working solutions.
+
+**For developers who**: Understand JWT and HTTP basics, want production-ready code, need permission-based access control.
+
+---
+
+## The Security Threats
+
+### 🔴 XSS (Cross-Site Scripting)
+
+Malicious JavaScript steals tokens from `localStorage`.
+
+**Example**: Third-party script gets compromised → Reads your tokens → Sends to attacker.
+
+**Impact**: Complete account takeover.
+
+---
+
+### 🔴 CSRF (Cross-Site Request Forgery)
+
+Malicious site tricks browser into making authenticated requests.
+
+**Example**: User visits evil.com → Form submits to your API → Browser sends cookies automatically.
+
+**Impact**: Unauthorized actions (money transfer, data deletion).
+
+---
+
+### 🔴 Token Theft
+
+Long-lived tokens stolen once = permanent access.
+
+**Impact**: Attacker uses token even after vulnerability is fixed.
+
+---
+
+## The Solutions
+
+Both guides solve these with:
+
+- **httpOnly cookies** - XSS protection
+- **Short access tokens** - Limit damage window
+- **Refresh tokens** - Maintain UX
+- **Backend validation** - Real security
+
+---
+
+## Choose Your Guide
+
+### 👉 [React Authentication](/docs/auth/react)
+
+**Single Page Applications**
+
+**Stack**: React + External API (Node.js/Django/.NET/etc.)
+
+**You'll implement:**
+
+- Secure token storage (memory + httpOnly cookies)
+- Automatic token refresh with Axios interceptors
+- Optimized permission hooks (prevent re-renders)
+- Route protection
+- Role & permission-based access
+
+---
+
+### 👉 [Next.js Authentication](/docs/auth/nextjs)
+
+**Server-Rendered Applications**
+
+**Stack**: Next.js App Router + External API
+
+**You'll implement:**
+
+- Auth.js (NextAuth) integration
+- Server Component authentication
+- Middleware route protection
+- Permission checks (server + client)
+- Server Actions security
+
+---
+
+## What Makes These Different
+
+✅ **No localStorage/sessionStorage** - Only secure methods  
+✅ **Auto token refresh** - Seamless 30-day sessions  
+✅ **Permission optimization** - No performance issues at scale  
+✅ **Production code** - Copy, paste, ship  
+✅ **Backend permissions** - Flexible structure from your API  
+✅ **Security first** - Explains WHY, not just HOW
+
+---
+
+## After Completing Either Guide
+
+You'll have:
+
+- ✅ XSS-protected authentication
+- ✅ CSRF-mitigated cookies
+- ✅ Automatic token refresh
+- ✅ Permission-based UI rendering
+- ✅ Route protection
+- ✅ Production-ready security
+
+---
+
+## Get Started
+
+**React SPA** → [React Authentication Guide](/docs/auth/react)  
+**Next.js App** → [Next.js Authentication Guide](/docs/auth/nextjs)
+
+**Pick based on your framework. Both are production-ready.**

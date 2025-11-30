@@ -1,0 +1,607 @@
+---
+title: "React.js"
+description: "Secure authentication for React SPAs with optimized permissions - straight to the point."
+---
+
+---
+
+## Why Not localStorage?
+
+```tsx
+localStorage.setItem("token", token); // ❌ XSS Attack
+```
+
+**Problem**: Any JavaScript can read it. If a third-party script gets compromised, all tokens are stolen.
+
+**Solution**: Use httpOnly cookies.
+
+---
+
+## The Right Way: httpOnly Cookies + Refresh Tokens
+
+**Two tokens:**
+
+- **Access Token** (15 min) - In memory (React state)
+- **Refresh Token** (30 days) - In httpOnly cookie
+
+**Why**: Short-lived access token limits damage. Refresh token can't be stolen by JavaScript.
+
+---
+
+## Implementation
+
+### 1. Auth Context
+
+```tsx
+// contexts/AuthContext.tsx
+import { createContext, useContext, useState, useEffect } from "react";
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  permissions: Array<{
+    resource: string;
+    actions: string[];
+  }>;
+}
+
+const AuthContext = createContext<any>(null);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Restore session on mount
+  useEffect(() => {
+    fetch("https://api.example.com/auth/refresh", {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setAccessToken(data.accessToken);
+          setUser(data.user);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    const res = await fetch("https://api.example.com/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!res.ok) throw new Error("Login failed");
+    const data = await res.json();
+    setAccessToken(data.accessToken);
+    setUser(data.user);
+  };
+
+  const logout = async () => {
+    await fetch("https://api.example.com/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+    setAccessToken(null);
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{ user, accessToken, loading, login, logout, setAccessToken }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => useContext(AuthContext);
+```
+
+---
+
+### 2. Axios with Auto-Refresh
+
+```tsx
+// lib/apiClient.ts
+import axios from "axios";
+
+const apiClient = axios.create({
+  baseURL: "https://api.example.com",
+  withCredentials: true,
+});
+
+let accessToken: string | null = null;
+let setAccessTokenFn: any = null;
+let logoutFn: any = null;
+
+export function setupApiClient(
+  token: string | null,
+  setToken: any,
+  logout: any
+) {
+  accessToken = token;
+  setAccessTokenFn = setToken;
+  logoutFn = logout;
+}
+
+// Attach token
+apiClient.interceptors.request.use((config) => {
+  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+  return config;
+});
+
+// Auto-refresh on 401
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const original = error.config;
+
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+
+      try {
+        const res = await axios.post(
+          "https://api.example.com/auth/refresh",
+          {},
+          { withCredentials: true }
+        );
+
+        const { accessToken: newToken } = res.data;
+        accessToken = newToken;
+        if (setAccessTokenFn) setAccessTokenFn(newToken);
+
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(original);
+      } catch {
+        if (logoutFn) await logoutFn();
+        return Promise.reject(error);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default apiClient;
+```
+
+**Connect in AuthContext:**
+
+```tsx
+import { setupApiClient } from "../lib/apiClient";
+
+useEffect(() => {
+  setupApiClient(accessToken, setAccessToken, logout);
+}, [accessToken]);
+```
+
+---
+
+### 3. Permission Hooks (Optimized)
+
+```tsx
+// hooks/usePermission.ts
+import { useMemo } from "react";
+import { useAuth } from "../contexts/AuthContext";
+
+// Single permission check
+export function usePermission(resource: string, action: string): boolean {
+  const { user } = useAuth();
+
+  return useMemo(() => {
+    if (!user) return false;
+    if (user.role === "admin") return true;
+
+    const permission = user.permissions.find((p) => p.resource === resource);
+    return permission ? permission.actions.includes(action) : false;
+  }, [user, resource, action]);
+}
+
+// Batch permissions (better performance)
+export function usePermissions(resource: string, actions: string[]) {
+  const { user } = useAuth();
+
+  return useMemo(() => {
+    const result: any = {};
+
+    if (!user) {
+      actions.forEach((action) => (result[`can${capitalize(action)}`] = false));
+      return result;
+    }
+
+    if (user.role === "admin") {
+      actions.forEach((action) => (result[`can${capitalize(action)}`] = true));
+      return result;
+    }
+
+    const permission = user.permissions.find((p) => p.resource === resource);
+    actions.forEach((action) => {
+      result[`can${capitalize(action)}`] =
+        permission?.actions.includes(action) || false;
+    });
+
+    return result;
+  }, [user, resource, actions]);
+}
+
+function capitalize(str: string) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+```
+
+---
+
+### 4. Login
+
+```tsx
+// pages/Login.tsx
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+
+export default function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await login(email, password);
+      navigate("/dashboard");
+    } catch {
+      setError("Invalid credentials");
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="max-w-md mx-auto p-8 mt-20">
+      <h1 className="text-2xl font-bold mb-4">Login</h1>
+      {error && <div className="text-red-600 mb-4">{error}</div>}
+
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        className="w-full p-2 border rounded mb-4"
+        required
+      />
+
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        className="w-full p-2 border rounded mb-4"
+        required
+      />
+
+      <button className="w-full bg-blue-600 text-white p-2 rounded">
+        Login
+      </button>
+    </form>
+  );
+}
+```
+
+---
+
+### 5. Dashboard with Permissions
+
+```tsx
+// pages/Dashboard.tsx
+import { useAuth } from "../contexts/AuthContext";
+import { usePermissions } from "../hooks/usePermission";
+
+export default function Dashboard() {
+  const { user, logout } = useAuth();
+
+  // Check all permissions at once
+  const postsPerms = usePermissions("posts", [
+    "view",
+    "create",
+    "edit",
+    "delete",
+  ]);
+  const usersPerms = usePermissions("users", ["view", "create", "edit"]);
+
+  return (
+    <div className="p-8">
+      <div className="flex justify-between mb-8">
+        <h1 className="text-3xl font-bold">Welcome, {user?.name}</h1>
+        <button
+          onClick={logout}
+          className="bg-red-600 text-white px-4 py-2 rounded"
+        >
+          Logout
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        {postsPerms.canView && (
+          <div className="border rounded p-4">
+            <h3 className="font-bold">Posts</h3>
+            <div className="mt-2 space-x-2">
+              {postsPerms.canCreate && (
+                <button className="text-blue-600">Create</button>
+              )}
+              {postsPerms.canEdit && (
+                <button className="text-green-600">Edit</button>
+              )}
+              {postsPerms.canDelete && (
+                <button className="text-red-600">Delete</button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {usersPerms.canView && (
+          <div className="border rounded p-4">
+            <h3 className="font-bold">Users</h3>
+            <div className="mt-2 space-x-2">
+              {usersPerms.canCreate && (
+                <button className="text-blue-600">Create</button>
+              )}
+              {usersPerms.canEdit && (
+                <button className="text-green-600">Edit</button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+### 6. Posts Page
+
+```tsx
+// pages/Posts.tsx
+import { useEffect, useState } from "react";
+import { usePermissions } from "../hooks/usePermission";
+import apiClient from "../lib/apiClient";
+
+export default function Posts() {
+  const [posts, setPosts] = useState([]);
+  const { canView, canCreate, canEdit, canDelete } = usePermissions("posts", [
+    "view",
+    "create",
+    "edit",
+    "delete",
+  ]);
+
+  useEffect(() => {
+    if (canView) {
+      apiClient.get("/posts").then((res) => setPosts(res.data));
+    }
+  }, [canView]);
+
+  const handleDelete = async (id: string) => {
+    await apiClient.delete(`/posts/${id}`);
+    setPosts(posts.filter((p: any) => p.id !== id));
+  };
+
+  return (
+    <div className="p-8">
+      <div className="flex justify-between mb-8">
+        <h1 className="text-3xl font-bold">Posts</h1>
+        {canCreate && (
+          <button className="bg-green-600 text-white px-4 py-2 rounded">
+            Create Post
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        {posts.map((post: any) => (
+          <div key={post.id} className="border rounded p-4">
+            <h3 className="text-xl font-bold">{post.title}</h3>
+            <p className="text-gray-600">{post.content}</p>
+
+            <div className="flex gap-2 mt-4">
+              {canEdit && <button className="text-blue-600">Edit</button>}
+              {canDelete && (
+                <button
+                  onClick={() => handleDelete(post.id)}
+                  className="text-red-600"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+### 7. Route Protection
+
+```tsx
+// components/PrivateRoute.tsx
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+
+export default function PrivateRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <div>Loading...</div>;
+  return user ? <Outlet /> : <Navigate to="/login" />;
+}
+
+// Usage
+<Route element={<PrivateRoute />}>
+  <Route path="/dashboard" element={<Dashboard />} />
+  <Route path="/posts" element={<Posts />} />
+</Route>;
+```
+
+---
+
+### 8. Permission Route
+
+```tsx
+// components/PermissionRoute.tsx
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { usePermission } from "../hooks/usePermission";
+
+export default function PermissionRoute({
+  resource,
+  action,
+  children,
+}: {
+  resource: string;
+  action: string;
+  children: React.ReactNode;
+}) {
+  const { user, loading } = useAuth();
+  const hasPermission = usePermission(resource, action);
+
+  if (loading) return <div>Loading...</div>;
+  if (!user) return <Navigate to="/login" />;
+  if (!hasPermission) return <Navigate to="/forbidden" />;
+
+  return <>{children}</>;
+}
+
+// Usage
+<Route
+  path="/posts/create"
+  element={
+    <PermissionRoute resource="posts" action="create">
+      <CreatePost />
+    </PermissionRoute>
+  }
+/>;
+```
+
+---
+
+## Backend Response
+
+```json
+{
+  "accessToken": "eyJhbG...",
+  "user": {
+    "id": "123",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "role": "editor",
+    "permissions": [
+      { "resource": "posts", "actions": ["view", "create", "edit", "delete"] },
+      { "resource": "users", "actions": ["view"] },
+      { "resource": "settings", "actions": ["view", "edit"] }
+    ]
+  }
+}
+```
+
+---
+
+## Performance Tips
+
+✅ **Use batch permissions:**
+
+```tsx
+const { canCreate, canEdit, canDelete } = usePermissions("posts", [
+  "create",
+  "edit",
+  "delete",
+]);
+```
+
+❌ **Avoid multiple single checks:**
+
+```tsx
+const canCreate = usePermission("posts", "create");
+const canEdit = usePermission("posts", "edit");
+const canDelete = usePermission("posts", "delete");
+```
+
+---
+
+## CASL (Optional - For Complex Rules)
+
+When you need "user can edit **own** posts only":
+
+```npm
+npm install @casl/ability @casl/react
+```
+
+```tsx
+// lib/ability.ts
+import { AbilityBuilder, createMongoAbility } from "@casl/ability";
+
+export function defineAbilitiesFor(user: any) {
+  const { can, build } = new AbilityBuilder(createMongoAbility);
+
+  if (!user) return build();
+
+  // Use backend permissions
+  user.permissions?.forEach((p: any) => {
+    p.actions.forEach((action: string) => can(action, p.resource));
+  });
+
+  // Add conditional rules
+  if (user.role === "editor") {
+    can(["update", "delete"], "Post", { authorId: user.id });
+  }
+
+  return build();
+}
+
+// Hook
+import { useMemo } from "react";
+import { useAuth } from "../contexts/AuthContext";
+
+export function useAbility() {
+  const { user } = useAuth();
+  return useMemo(() => defineAbilitiesFor(user), [user]);
+}
+
+// Usage
+const ability = useAbility();
+if (ability.can("update", post)) {
+  // Can update this specific post
+}
+```
+
+---
+
+## Security Checklist
+
+- ✅ Access tokens: 15-30 min lifetime
+- ✅ Refresh tokens: httpOnly cookies
+- ✅ Cookies: `secure: true`, `sameSite: 'strict'`
+- ✅ HTTPS in production
+- ✅ Backend validates all permissions
+- ✅ Token refresh rotation
+
+---
+
+## Key Points
+
+🔒 **httpOnly cookies** - XSS protection  
+🔄 **Auto token refresh** - Seamless UX  
+🚀 **Batch permissions** - Better performance  
+✅ **Backend validation** - Real security
+
+**Done. Production-ready authentication with optimized permissions.** 🎉
