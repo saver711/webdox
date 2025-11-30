@@ -3,6 +3,8 @@ title: Table with Client-Side Data
 description: Build accessible, scalable tables with pagination, sorting, and filtering
 ---
 
+import Author from "@/components/shared/author.tsx"
+
 ## Introduction
 
 Tired of UI component libraries that give you a table component without real, practical examples? This guide demonstrates best practices for building accessible, scalable tables with pagination, sorting, and filtering—following patterns that work across any UI library.
@@ -152,29 +154,29 @@ export interface Blogger {
     <Tab value="Server Component (Bloggers Page)">
 
 ```tsx title="app/bloggers/page.tsx"
-import { BloggersTable } from "./components/bloggers-table";
-import type { Blogger } from "./models/blogger.model";
+import { BloggersTable } from "./components/bloggers-table"
+import type { Blogger } from "./models/blogger.model"
 
-export const revalidate = false; // Static generation at build time
+export const revalidate = false // Static generation at build time
 
 async function getData(): Promise<Blogger[]> {
-  const bloggers = (await import("@/data/bloggers.json")).default;
-  return bloggers;
+  const bloggers = (await import("@/data/bloggers.json")).default
+  return bloggers
 }
 
 export const metadata = {
   title: "Bloggers",
-  description: "View all bloggers",
-};
+  description: "View all bloggers"
+}
 
 export default async function BloggersPage() {
-  const data = await getData();
+  const data = await getData()
 
   return (
     <div className="container mx-auto py-10">
       <BloggersTable data={data} />
     </div>
-  );
+  )
 }
 ```
 
@@ -192,7 +194,7 @@ Here, we fetch data on the server (following Next.js best practices) to ensure c
 This is your core, reusable table component. It handles **visual rendering only**—no data fetching or complex logic.
 
 ```tsx title="app/components/ui/table/data-table.tsx"
-"use client";
+"use client"
 
 import {
   type ColumnDef,
@@ -200,28 +202,28 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   type SortingState,
-  useReactTable,
-} from "@tanstack/react-table";
-import { useState } from "react";
+  useReactTable
+} from "@tanstack/react-table"
+import { useState } from "react"
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  TableRow
+} from "@/components/ui/table"
 
 interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[];
-  data: TData[];
+  columns: ColumnDef<TData, TValue>[]
+  data: TData[]
 }
 
 export const DataTable = <TData, TValue>({
   columns,
-  data,
+  data
 }: DataTableProps<TData, TValue>) => {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>([])
 
   const table = useReactTable({
     data,
@@ -230,18 +232,18 @@ export const DataTable = <TData, TValue>({
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
     state: {
-      sorting,
-    },
-  });
+      sorting
+    }
+  })
 
   return (
     <div>
       <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
+            {table.getHeaderGroups().map(headerGroup => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
+                {headerGroup.headers.map(header => {
                   return (
                     <TableHead key={header.id}>
                       {header.isPlaceholder
@@ -251,16 +253,16 @@ export const DataTable = <TData, TValue>({
                             header.getContext()
                           )}
                     </TableHead>
-                  );
+                  )
                 })}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map(row => (
                 <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getVisibleCells().map(cell => (
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
@@ -284,8 +286,8 @@ export const DataTable = <TData, TValue>({
         </Table>
       </div>
     </div>
-  );
-};
+  )
+}
 ```
 
 ### Client Component (Bloggers Table)
@@ -293,15 +295,15 @@ export const DataTable = <TData, TValue>({
 This component manages all the logic: data, filtering, deletion, etc. The `DataTable` receives only what it needs.
 
 ```tsx title="app/bloggers/components/bloggers-table.tsx"
-"use client";
+"use client"
 
-import { useState } from "react";
-import { DataTable } from "@/app/components/ui/table/data-table";
-import type { Blogger } from "../models/blogger.model";
-import { bloggersTableColumns } from "../consts/bloggers-table-columns.const";
+import { useState } from "react"
+import { DataTable } from "@/app/components/ui/table/data-table"
+import type { Blogger } from "../models/blogger.model"
+import { bloggersTableColumns } from "../consts/bloggers-table-columns.const"
 
 interface BloggersTableProps {
-  data: Blogger[];
+  data: Blogger[]
 }
 
 export const BloggersTable = ({ data }: BloggersTableProps) => {
@@ -315,8 +317,8 @@ export const BloggersTable = ({ data }: BloggersTableProps) => {
       // <DataTable columns={bloggersTableColumns} data={filteredData} />
       <DataTable columns={bloggersTableColumns} data={data} />
     </div>
-  );
-};
+  )
+}
 ```
 
 ---
@@ -364,7 +366,7 @@ return (
   className="flex w-full items-center gap-1"
   variant="ghost"
   onClick={() => {
-    column.toggleSorting(isSorted === "asc");
+    column.toggleSorting(isSorted === "asc")
   }}
 >
   {getSortIcon()}
@@ -421,7 +423,7 @@ Update the `data-table.tsx` file with the following changes:
 **At the top, add to state:**
 
 ```typescript
-const [rowSelection, setRowSelection] = useState({});
+const [rowSelection, setRowSelection] = useState({})
 ```
 
 **In the `useReactTable` hook, add:**
@@ -439,8 +441,8 @@ rowSelection,
 **Before the table JSX, add:**
 
 ```typescript
-const selectedRowsCount = table.getFilteredSelectedRowModel().rows.length;
-const rowsCount = table.getFilteredRowModel().rows.length;
+const selectedRowsCount = table.getFilteredSelectedRowModel().rows.length
+const rowsCount = table.getFilteredRowModel().rows.length
 ```
 
 **And in the return JSX, add this after the table div container:**
@@ -508,14 +510,14 @@ export const TableSelectRowCheckbox = <T>({
 Update your columns utility to include the selection column:
 
 ```tsx title="app/bloggers/consts/bloggers-table-columns.const.tsx"
-"use client";
+"use client"
 
-import type { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
-import { TableSelectAllCheckbox } from "@/app/components/ui/table/table-select-all-checkbox";
-import { TableSelectRowCheckbox } from "@/app/components/ui/table/table-select-row-checkbox";
-import { TableSortingButton } from "@/app/components/ui/table/table-sorting-button";
-import type { Blogger } from "../models/blogger.model";
+import type { ColumnDef } from "@tanstack/react-table"
+import { format } from "date-fns"
+import { TableSelectAllCheckbox } from "@/app/components/ui/table/table-select-all-checkbox"
+import { TableSelectRowCheckbox } from "@/app/components/ui/table/table-select-row-checkbox"
+import { TableSortingButton } from "@/app/components/ui/table/table-sorting-button"
+import type { Blogger } from "../models/blogger.model"
 
 export const bloggersTableColumns: ColumnDef<Blogger>[] = [
   {
@@ -523,10 +525,10 @@ export const bloggersTableColumns: ColumnDef<Blogger>[] = [
     header: ({ table }) => <TableSelectAllCheckbox table={table} />,
     cell: ({ row }) => <TableSelectRowCheckbox row={row} />,
     enableSorting: false,
-    enableHiding: false,
-  },
+    enableHiding: false
+  }
   // ... rest of columns
-];
+]
 ```
 
 <Callout type="info">
@@ -610,16 +612,16 @@ This example demonstrates that, in most cases, you won’t define columns as a s
 ### New utility to get table columns
 
 ```tsx title="app/bloggers/utils/get-bloggers-table-columns.util.tsx"
-"use client";
+"use client"
 
-import type { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
-import { TableActionsCell } from "@/app/components/ui/table/table-actions-cell";
-import { TableSelectAllCheckbox } from "@/app/components/ui/table/table-select-all-checkbox";
-import { TableSelectRowCheckbox } from "@/app/components/ui/table/table-select-row-checkbox";
-import { TableSortingButton } from "@/app/components/ui/table/table-sorting-button";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import type { Blogger } from "../models/blogger.model";
+import type { ColumnDef } from "@tanstack/react-table"
+import { format } from "date-fns"
+import { TableActionsCell } from "@/app/components/ui/table/table-actions-cell"
+import { TableSelectAllCheckbox } from "@/app/components/ui/table/table-select-all-checkbox"
+import { TableSelectRowCheckbox } from "@/app/components/ui/table/table-select-row-checkbox"
+import { TableSortingButton } from "@/app/components/ui/table/table-sorting-button"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import type { Blogger } from "../models/blogger.model"
 
 export const getBloggersTableColumns = (): ColumnDef<Blogger>[] => {
   return [
@@ -628,19 +630,17 @@ export const getBloggersTableColumns = (): ColumnDef<Blogger>[] => {
       header: ({ table }) => <TableSelectAllCheckbox table={table} />,
       cell: ({ row }) => <TableSelectRowCheckbox row={row} />,
       enableSorting: false,
-      enableHiding: false,
+      enableHiding: false
     },
     {
       accessorKey: "name",
       header: ({ column }) => (
         <TableSortingButton column={column} label="Name" />
-      ),
+      )
     },
     {
       accessorKey: "bio",
-      header: ({ column }) => (
-        <TableSortingButton column={column} label="Bio" />
-      ),
+      header: ({ column }) => <TableSortingButton column={column} label="Bio" />
     },
     {
       accessorKey: "createdAt",
@@ -648,9 +648,9 @@ export const getBloggersTableColumns = (): ColumnDef<Blogger>[] => {
         <TableSortingButton column={column} label="Created At" />
       ),
       cell: ({ row }) => {
-        const date = new Date(row.getValue("createdAt") as string);
-        return format(date, "PPP");
-      },
+        const date = new Date(row.getValue("createdAt") as string)
+        return format(date, "PPP")
+      }
     },
     {
       id: "actions",
@@ -661,10 +661,10 @@ export const getBloggersTableColumns = (): ColumnDef<Blogger>[] => {
             <DropdownMenuItem>action item</DropdownMenuItem>
           </DropdownMenuItem>
         </TableActionsCell>
-      ),
-    },
-  ];
-};
+      )
+    }
+  ]
+}
 ```
 
 <Callout type="info">
@@ -677,19 +677,19 @@ export const getBloggersTableColumns = (): ColumnDef<Blogger>[] => {
 ### Generic Actions Cell Component
 
 ```tsx title="app/components/ui/table/table-actions-cell.tsx"
-"use client";
+"use client"
 
-import { MoreVertical } from "lucide-react";
-import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { MoreVertical } from "lucide-react"
+import type { ReactNode } from "react"
+import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu"
 
 interface TableActionsCellProps {
-  children: ReactNode;
+  children: ReactNode
 }
 
 export const TableActionsCell = ({ children }: TableActionsCellProps) => {
@@ -703,36 +703,36 @@ export const TableActionsCell = ({ children }: TableActionsCellProps) => {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">{children}</DropdownMenuContent>
     </DropdownMenu>
-  );
-};
+  )
+}
 ```
 
 ### Update BloggersTable to call the utility
 
 ```tsx title="app/bloggers/components/bloggers-table.tsx"
-"use client";
+"use client"
 
-import { useState } from "react";
-import { DataTable } from "@/app/components/ui/table/data-table";
-import type { Blogger } from "../models/blogger.model";
-import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util";
+import { useState } from "react"
+import { DataTable } from "@/app/components/ui/table/data-table"
+import type { Blogger } from "../models/blogger.model"
+import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util"
 
 interface BloggersTableProps {
-  data: Blogger[];
+  data: Blogger[]
 }
 
 export const BloggersTable = ({ data }: BloggersTableProps) => {
-  const [filteredData, setFilteredData] = useState<Blogger[]>(data);
+  const [filteredData, setFilteredData] = useState<Blogger[]>(data)
 
-  const columns = getBloggersTableColumns();
+  const columns = getBloggersTableColumns()
 
   return (
     <div>
       // <BloggersFilterBar data={data} onFilter={setFilteredData} />
       <DataTable columns={columns} data={filteredData} />
     </div>
-  );
-};
+  )
+}
 ```
 
 ---
@@ -746,7 +746,7 @@ Pagination divides large datasets into manageable chunks. Add it to your `DataTa
 First, update your imports to include `getPaginationRowModel`:
 
 ```typescript
-import { getPaginationRowModel } from "@tanstack/react-table";
+import { getPaginationRowModel } from "@tanstack/react-table"
 ```
 
 Then update your `useReactTable` hook to include:
@@ -758,10 +758,10 @@ getPaginationRowModel: getPaginationRowModel(),
 And import and add the pagination component at the bottom (after the table, inside the div):
 
 ```typescript
-import { TablePagination } from "./table-pagination";
+import { TablePagination } from "./table-pagination"
 
 // Inside return JSX, after the table:
-<TablePagination table={table} />;
+;<TablePagination table={table} />
 ```
 
 ### Create Pagination Component
@@ -769,7 +769,7 @@ import { TablePagination } from "./table-pagination";
 First, create a constants file:
 
 ```tsx title="app/components/ui/table/consts/default-table-per-page-options.const.ts"
-export const DEFAULT_TABLE_PER_PAGE_OPTIONS = [2, 5, 10, 20, 30, 40, 50];
+export const DEFAULT_TABLE_PER_PAGE_OPTIONS = [2, 5, 10, 20, 30, 40, 50]
 ```
 
 Then create the pagination component:
@@ -898,15 +898,15 @@ We could spend all day convincing you not to put filtration inside the table, bu
 ```tsx title="app/bloggers/components/bloggers-filter-bar.tsx"
 "use client"
 
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@hookform/resolvers/zod"
 // @ts-expect-error Butterfly has no types - Feel free to use the filtration mechanism of your choice
-import { applyFilters } from "butterfly-data-filters";
-import { Filter } from "lucide-react";
-import { useRef } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { DatePicker } from "@/app/components/ui/date-picker";
-import { Button } from "@/components/ui/button";
+import { applyFilters } from "butterfly-data-filters"
+import { Filter } from "lucide-react"
+import { useRef } from "react"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
+import { DatePicker } from "@/app/components/ui/date-picker"
+import { Button } from "@/components/ui/button"
 import {
   Drawer,
   DrawerClose,
@@ -914,11 +914,11 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import type { Blogger } from "../models/blogger.model";
+  DrawerTrigger
+} from "@/components/ui/drawer"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import type { Blogger } from "../models/blogger.model"
 
 // Schema for validation
 const filterSchema = z.object({
@@ -1135,30 +1135,30 @@ export const DatePicker = ({
 ### Update BloggersTable to include the filter bar
 
 ```tsx title="app/bloggers/components/bloggers-table.tsx"
-"use client";
+"use client"
 
-import { useState } from "react";
-import { DataTable } from "@/app/components/ui/table/data-table";
-import type { Blogger } from "../models/blogger.model";
-import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util";
-import { BloggersFilterBar } from "./bloggers-filter-bar";
+import { useState } from "react"
+import { DataTable } from "@/app/components/ui/table/data-table"
+import type { Blogger } from "../models/blogger.model"
+import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util"
+import { BloggersFilterBar } from "./bloggers-filter-bar"
 
 interface BloggersTableProps {
-  data: Blogger[];
+  data: Blogger[]
 }
 
 export const BloggersTable = ({ data }: BloggersTableProps) => {
-  const [filteredData, setFilteredData] = useState<Blogger[]>(data);
+  const [filteredData, setFilteredData] = useState<Blogger[]>(data)
 
-  const columns = getBloggersTableColumns();
+  const columns = getBloggersTableColumns()
 
   return (
     <div className="flex flex-col gap-4">
       <BloggersFilterBar data={data} onFilter={setFilteredData} />
       <DataTable columns={columns} data={filteredData} />
     </div>
-  );
-};
+  )
+}
 ```
 
 ---
@@ -1179,30 +1179,30 @@ npm install nuqs
 ### Wrap app children with nuqs adapter
 
 ```tsx title="app/layout.tsx"
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { NuqsAdapter } from "nuqs/adapters/next/app";
+import type { Metadata } from "next"
+import { Geist, Geist_Mono } from "next/font/google"
+import "./globals.css"
+import { NuqsAdapter } from "nuqs/adapters/next/app"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+  subsets: ["latin"]
+})
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+  subsets: ["latin"]
+})
 
 export const metadata: Metadata = {
   title: "Create Next App",
-  description: "Generated by create next app",
-};
+  description: "Generated by create next app"
+}
 
 export default function RootLayout({
-  children,
+  children
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
     <html lang="en">
@@ -1212,7 +1212,7 @@ export default function RootLayout({
         <NuqsAdapter>{children}</NuqsAdapter>
       </body>
     </html>
-  );
+  )
 }
 ```
 
@@ -1365,44 +1365,44 @@ export const filterBloggers = (values: FilterProps, data: Blogger[]) => {
 ### Update Bloggers Page Component to filter data based on URL params (server-side)
 
 ```tsx title="app/bloggers/page.tsx"
-import { BloggersTable } from "./components/bloggers-table";
-import type { Blogger } from "./models/blogger.model";
-import { filterBloggers } from "./utils/filter-bloggers";
+import { BloggersTable } from "./components/bloggers-table"
+import type { Blogger } from "./models/blogger.model"
+import { filterBloggers } from "./utils/filter-bloggers"
 
-export const revalidate = false;
+export const revalidate = false
 
 async function getData(): Promise<Blogger[]> {
-  const bloggers = (await import("@/data/bloggers.json")).default;
-  return bloggers;
+  const bloggers = (await import("@/data/bloggers.json")).default
+  return bloggers
 }
 
 export const metadata = {
   title: "Bloggers",
-  description: "View all bloggers",
-};
+  description: "View all bloggers"
+}
 
 type PageSearchParams = {
-  name?: string;
-  bio?: string;
-  dateFrom?: string;
-  dateTo?: string;
-};
+  name?: string
+  bio?: string
+  dateFrom?: string
+  dateTo?: string
+}
 
 export default async function BloggersPage({
-  searchParams,
+  searchParams
 }: {
-  searchParams: Promise<PageSearchParams>;
+  searchParams: Promise<PageSearchParams>
 }) {
-  const values = await searchParams;
-  const data = await getData();
+  const values = await searchParams
+  const data = await getData()
 
-  const filteredData = filterBloggers(values, data);
+  const filteredData = filterBloggers(values, data)
 
   return (
     <div className="container mx-auto py-10">
       <BloggersTable data={data} filteredData={filteredData} />
     </div>
-  );
+  )
 }
 ```
 
@@ -1413,11 +1413,11 @@ export default async function BloggersPage({
 ```ts title="app/bloggers/hooks/use-table-url-state.ts"
 "use client";
 
-import { parseAsInteger, useQueryStates } from "nuqs";
-import { DEFAULT_TABLE_PAGE_INDEX_VALUE } from "../consts/default-table-page-index-value.const"; // 0
-import { DEFAULT_TABLE_PER_PAGE_VALUE } from "../consts/default-table-per-page-value.const";
-import { sortParser } from "../utils/sort-parser.util";
-import { pageParser } from "../utils/page-parser.util";
+import { parseAsInteger, useQueryStates } from "nuqs"
+import { DEFAULT_TABLE_PAGE_INDEX_VALUE } from "../consts/default-table-page-index-value.const" // 0
+import { DEFAULT_TABLE_PER_PAGE_VALUE } from "../consts/default-table-per-page-value.const"
+import { sortParser } from "../utils/sort-parser.util"
+import { pageParser } from "../utils/page-parser.util"
 
 const tableUrlStateSchema = ({
 sortParamName = "sort",
@@ -1432,18 +1432,18 @@ pageSizeParamName = "pageSize",
 export const useTableUrlState = ({
   sortParamName = "sort",
   pageParamName = "page",
-  pageSizeParamName = "pageSize",
+  pageSizeParamName = "pageSize"
 }) =>
   useQueryStates(
     tableUrlStateSchema({
       sortParamName,
       pageParamName,
-      pageSizeParamName,
+      pageSizeParamName
     }),
     {
-      history: "replace",
+      history: "replace"
     }
-  );
+  )
 
 ````
 </Tab>
@@ -1528,7 +1528,7 @@ export const sortParser = createParser<SortingState>({
 ### Update DataTable Component
 
 ```tsx title="app/components/ui/table/data-table.tsx"
-"use client";
+"use client"
 
 import {
   type ColumnDef,
@@ -1538,30 +1538,30 @@ import {
   getSortedRowModel,
   type SortingState,
   useReactTable,
-  PaginationState,
-} from "@tanstack/react-table";
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
+  PaginationState
+} from "@tanstack/react-table"
+import { Dispatch, SetStateAction, useEffect, useState } from "react"
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { TablePagination } from "./table-pagination";
+  TableRow
+} from "@/components/ui/table"
+import { TablePagination } from "./table-pagination"
 
 interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[];
-  data: TData[];
-  onRowSelectionChange?: (selectedRows: TData[]) => void;
-  rowId: keyof TData;
+  columns: ColumnDef<TData, TValue>[]
+  data: TData[]
+  onRowSelectionChange?: (selectedRows: TData[]) => void
+  rowId: keyof TData
 
-  sorting: SortingState;
-  setSorting: Dispatch<SetStateAction<SortingState>>;
+  sorting: SortingState
+  setSorting: Dispatch<SetStateAction<SortingState>>
 
-  setPagination: (updater: SetStateAction<PaginationState>) => void;
-  pagination: PaginationState;
+  setPagination: (updater: SetStateAction<PaginationState>) => void
+  pagination: PaginationState
 }
 
 export const DataTable = <TData, TValue>({
@@ -1574,9 +1574,9 @@ export const DataTable = <TData, TValue>({
   setSorting,
 
   setPagination,
-  pagination,
+  pagination
 }: DataTableProps<TData, TValue>) => {
-  const [rowSelection, setRowSelection] = useState({});
+  const [rowSelection, setRowSelection] = useState({})
 
   const table = useReactTable({
     data,
@@ -1590,10 +1590,10 @@ export const DataTable = <TData, TValue>({
     state: {
       sorting,
       rowSelection,
-      pagination: pagination,
+      pagination: pagination
     },
-    getRowId: (row) => String(row[rowId]),
-  });
+    getRowId: row => String(row[rowId])
+  })
 
   // Notify parent when row selection changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: Iam depending on rowSelection
@@ -1601,22 +1601,22 @@ export const DataTable = <TData, TValue>({
     if (onRowSelectionChange) {
       const selectedRows = table
         .getSelectedRowModel()
-        .rows.map((row) => row.original);
-      onRowSelectionChange(selectedRows);
+        .rows.map(row => row.original)
+      onRowSelectionChange(selectedRows)
     }
-  }, [rowSelection, table, onRowSelectionChange]);
+  }, [rowSelection, table, onRowSelectionChange])
 
-  const selectedRowsCount = table.getFilteredSelectedRowModel().rows.length;
-  const rowsCount = table.getFilteredRowModel().rows.length;
+  const selectedRowsCount = table.getFilteredSelectedRowModel().rows.length
+  const rowsCount = table.getFilteredRowModel().rows.length
 
   return (
     <div>
       <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
+            {table.getHeaderGroups().map(headerGroup => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
+                {headerGroup.headers.map(header => {
                   return (
                     <TableHead key={header.id}>
                       {header.isPlaceholder
@@ -1626,19 +1626,19 @@ export const DataTable = <TData, TValue>({
                             header.getContext()
                           )}
                     </TableHead>
-                  );
+                  )
                 })}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map(row => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getVisibleCells().map(cell => (
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
@@ -1669,38 +1669,38 @@ export const DataTable = <TData, TValue>({
         <TablePagination table={table} />
       </div>
     </div>
-  );
-};
+  )
+}
 ```
 
 ### update bloggers table
 
 ```tsx title="app/bloggers/components/bloggers-table.tsx"
-"use client";
+"use client"
 
-import { Trash2 } from "lucide-react";
-import { useState } from "react";
-import { DataTable } from "@/app/components/ui/table/data-table";
-import { Button } from "@/components/ui/button";
-import type { Blogger } from "../models/blogger.model";
-import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util";
-import { BloggersFilterBar } from "./bloggers-filter-bar";
-import { useTableSorting } from "@/app/components/ui/table/hooks/use-table-sorting";
-import { useTablePagination } from "@/app/components/ui/table/hooks/use-table-pagination";
+import { Trash2 } from "lucide-react"
+import { useState } from "react"
+import { DataTable } from "@/app/components/ui/table/data-table"
+import { Button } from "@/components/ui/button"
+import type { Blogger } from "../models/blogger.model"
+import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util"
+import { BloggersFilterBar } from "./bloggers-filter-bar"
+import { useTableSorting } from "@/app/components/ui/table/hooks/use-table-sorting"
+import { useTablePagination } from "@/app/components/ui/table/hooks/use-table-pagination"
 
 interface BloggersTableProps {
-  data: Blogger[];
-  filteredData: Blogger[];
+  data: Blogger[]
+  filteredData: Blogger[]
 }
 
 export const BloggersTable = ({ data, filteredData }: BloggersTableProps) => {
-  const [finalData, setfinalData] = useState<Blogger[]>(filteredData);
-  const [selectedBloggers, setSelectedBloggers] = useState<Blogger[]>([]);
+  const [finalData, setfinalData] = useState<Blogger[]>(filteredData)
+  const [selectedBloggers, setSelectedBloggers] = useState<Blogger[]>([])
   // We are managing pagination and sorting from outside because we might add 2 tables inside one page - We need to pass different param names
-  const { sorting, setSorting } = useTableSorting();
-  const { pagination, setPagination } = useTablePagination();
+  const { sorting, setSorting } = useTableSorting()
+  const { pagination, setPagination } = useTablePagination()
 
-  const columns = getBloggersTableColumns();
+  const columns = getBloggersTableColumns()
 
   return (
     <div className="space-y-4">
@@ -1719,8 +1719,8 @@ export const BloggersTable = ({ data, filteredData }: BloggersTableProps) => {
         setPagination={setPagination}
       />
     </div>
-  );
-};
+  )
+}
 ```
 
 ### Update Filter Bar Component
@@ -1731,15 +1731,15 @@ Now, let's update the `BloggersFilterBar` to use our new hook and utility.
 
 ```tsx title="app/bloggers/components/bloggers-filter-bar.tsx"
 // app/bloggers/components/bloggers-filter-bar.tsx
-"use client";
+"use client"
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Filter } from "lucide-react";
-import { useRef } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { DatePicker } from "@/app/components/ui/date-picker";
-import { Button } from "@/components/ui/button";
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Filter } from "lucide-react"
+import { useRef } from "react"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
+import { DatePicker } from "@/app/components/ui/date-picker"
+import { Button } from "@/components/ui/button"
 import {
   Drawer,
   DrawerClose,
@@ -1747,49 +1747,49 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useBloggersUrlState } from "../hooks/use-bloggers-url-state";
-import type { Blogger } from "../models/blogger.model";
-import { filterBloggers } from "../utils/filter-bloggers";
+  DrawerTrigger
+} from "@/components/ui/drawer"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useBloggersUrlState } from "../hooks/use-bloggers-url-state"
+import type { Blogger } from "../models/blogger.model"
+import { filterBloggers } from "../utils/filter-bloggers"
 
 const filterSchema = z.object({
   name: z.string().optional(),
   bio: z.string().optional(),
   dateFrom: z.date().nullable().optional(),
-  dateTo: z.date().nullable().optional(),
-});
+  dateTo: z.date().nullable().optional()
+})
 
-export type FilterInputs = z.infer<typeof filterSchema>;
+export type FilterInputs = z.infer<typeof filterSchema>
 
 interface BloggersFilterBarProps {
-  data: Blogger[];
-  onFilter: (filteredData: Blogger[]) => void;
+  data: Blogger[]
+  onFilter: (filteredData: Blogger[]) => void
 }
 
 function toUTCStartOfLocalDay(date: Date) {
-  const localYear = date.getFullYear();
-  const localMonth = date.getMonth();
-  const localDay = date.getDate();
+  const localYear = date.getFullYear()
+  const localMonth = date.getMonth()
+  const localDay = date.getDate()
 
-  const dLocalMidnight = new Date(localYear, localMonth, localDay, 0, 0, 0, 0);
-  return dLocalMidnight.toISOString();
+  const dLocalMidnight = new Date(localYear, localMonth, localDay, 0, 0, 0, 0)
+  return dLocalMidnight.toISOString()
 }
 
 function toUTCEndOfLocalDay(date: Date) {
-  const localYear = date.getFullYear();
-  const localMonth = date.getMonth();
-  const localDay = date.getDate();
+  const localYear = date.getFullYear()
+  const localMonth = date.getMonth()
+  const localDay = date.getDate()
 
-  const dLocalEnd = new Date(localYear, localMonth, localDay, 23, 59, 59, 999);
-  return dLocalEnd.toISOString();
+  const dLocalEnd = new Date(localYear, localMonth, localDay, 23, 59, 59, 999)
+  return dLocalEnd.toISOString()
 }
 
 const parseUTCDate = (isoString: string | null) => {
-  if (!isoString) return null;
-  const date = new Date(isoString);
+  if (!isoString) return null
+  const date = new Date(isoString)
   return new Date(
     Date.UTC(
       date.getUTCFullYear(),
@@ -1800,58 +1800,58 @@ const parseUTCDate = (isoString: string | null) => {
       date.getUTCSeconds(),
       date.getUTCMilliseconds()
     )
-  );
-};
+  )
+}
 
 export const BloggersFilterBar = ({
   onFilter,
-  data,
+  data
 }: BloggersFilterBarProps) => {
-  const drawerCloseRef = useRef<HTMLButtonElement>(null);
-  const [query, setQuery] = useBloggersUrlState();
+  const drawerCloseRef = useRef<HTMLButtonElement>(null)
+  const [query, setQuery] = useBloggersUrlState()
   const filtersAppliedCount = Object.values(query).filter(
-    (value) => value !== undefined && value !== null && value !== ""
-  ).length;
+    value => value !== undefined && value !== null && value !== ""
+  ).length
 
   const form = useForm<FilterInputs>({
     resolver: zodResolver(filterSchema),
     defaultValues: {
       ...query,
       dateFrom: query.dateFrom ? parseUTCDate(query.dateFrom) : null,
-      dateTo: query.dateTo ? parseUTCDate(query.dateTo) : null,
-    },
-  });
+      dateTo: query.dateTo ? parseUTCDate(query.dateTo) : null
+    }
+  })
 
   const onSubmit = (values: FilterInputs) => {
     setQuery({
       ...values,
       dateFrom: values.dateFrom ? values.dateFrom.toISOString() : "",
-      dateTo: values.dateTo ? toUTCEndOfLocalDay(values.dateTo) : "",
-    });
+      dateTo: values.dateTo ? toUTCEndOfLocalDay(values.dateTo) : ""
+    })
 
     const filteredData = filterBloggers(
       {
         ...values,
         dateFrom: values.dateFrom ? toUTCStartOfLocalDay(values.dateFrom) : "",
-        dateTo: values.dateTo ? toUTCEndOfLocalDay(values.dateTo) : "",
+        dateTo: values.dateTo ? toUTCEndOfLocalDay(values.dateTo) : ""
       },
       data
-    );
-    onFilter(filteredData);
-    drawerCloseRef.current?.click();
-  };
+    )
+    onFilter(filteredData)
+    drawerCloseRef.current?.click()
+  }
 
   const handleReset = () => {
-    form.reset();
-  };
+    form.reset()
+  }
 
   function handleClear(): void {
     form.reset({
       bio: "",
       dateFrom: null,
       dateTo: null,
-      name: "",
-    });
+      name: ""
+    })
   }
   return (
     <Drawer direction="right">
@@ -1904,10 +1904,10 @@ export const BloggersFilterBar = ({
                 <DatePicker
                   id="date-from"
                   date={form.watch("dateFrom") ?? undefined}
-                  setDate={(date) => {
-                    console.log(date);
-                    console.log(date?.toUTCString());
-                    form.setValue("dateFrom", date);
+                  setDate={date => {
+                    console.log(date)
+                    console.log(date?.toUTCString())
+                    form.setValue("dateFrom", date)
                   }}
                   placeholder="From"
                 />
@@ -1915,7 +1915,7 @@ export const BloggersFilterBar = ({
                 <DatePicker
                   id="date-to"
                   date={form.watch("dateTo") ?? undefined}
-                  setDate={(date) => form.setValue("dateTo", date)}
+                  setDate={date => form.setValue("dateTo", date)}
                   placeholder="To"
                 />
               </div>
@@ -1954,8 +1954,8 @@ export const BloggersFilterBar = ({
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
-  );
-};
+  )
+}
 ```
 
 ---
@@ -1988,6 +1988,21 @@ You can explore the live demo or check the code below:
   />
 </div>
 ---
+
+**Written By**
+
+<Card>
+  <Author
+    name="Ahmed Hassan"
+    linkedin="https://www.linkedin.com/in/ahmedhassan711"
+    github="https://github.com/saver711"
+    title="Senior Front-End Developer"
+    src="/ah.png"
+  />
+</Card>
+
+---
+
 ## Next Step:
 
 [Server-side data table](/docs/components/table/server-data)
