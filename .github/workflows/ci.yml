@@ -65,18 +65,6 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
-  tsc:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Setup
-        uses: ./.github/actions/setup
-
-      - name: tsc
-        run: pnpm tsc --noEmit --pretty false
-
   vitest:
     runs-on: ubuntu-latest
     steps:

@@ -27,7 +27,7 @@
 		"vaul": "1.1.2"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.2.0",
+		"@biomejs/biome": "2.3.6",
 		"@commitlint/cli": "19.8.1",
 		"@commitlint/config-conventional": "19.8.1",
 		"@playwright/test": "1.54.2",

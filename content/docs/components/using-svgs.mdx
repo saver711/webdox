@@ -1,0 +1,505 @@
+---
+title: Using SVGs
+description: SVGs as React Components
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { File, Folder, Files } from 'fumadocs-ui/components/files';
+import Author from '@/components/shared/author.tsx';
+
+---
+
+## Introduction
+
+Working with SVGs in React can be tricky. If you use raw SVGs directly, you cannot easily override props like `width`, `height`, `fill`, or `stroke`.
+
+Manually converting each SVG into a React component is repetitive, time-consuming, and error-prone.
+
+**SVGR** solves this problem by transforming SVG files into fully customizable React components. You can import them directly into your React application and control them using props—such as `width`, `height`, `fill`, `stroke`, `className`, and more.
+
+### Why use SVGR?
+
+Without SVGR, your options are:
+
+1. **Use raw SVGs directly** – You cannot easily override props like `fill`, `stroke`, `width`, or `height`.
+2. **Manually convert every SVG into a React component** – Time-consuming, repetitive, and error-prone.
+
+SVGR also integrates **SVGO** for automatic SVG optimization.
+
+---
+
+## Installation & Setup
+
+SVGR can be installed and configured in multiple ways depending on how you structure your React/Next.js project.
+
+Below are the two essential steps: installing dependencies and setting up the configuration file.
+
+<Tabs groupId="dependencies" items={['Next.js', 'React']}>
+  <Tab value="Next.js">
+    <Tabs groupId="next-install" items={['npm', 'pnpm', 'yarn', 'bun']}>
+      <Tab value="npm">
+        ```bash
+        npm install --save-dev @svgr/webpack
+        ```
+      </Tab>
+      <Tab value="pnpm">
+      ```bash
+      pnpm add -D @svgr/webpack
+      ```
+      </Tab>
+      <Tab value="yarn">
+      ```bash
+      yarn add -D @svgr/webpack
+      ```
+      </Tab>
+      <Tab value="bun">
+      ```bash
+      bun add -d @svgr/webpack
+      ```
+      </Tab>
+    </Tabs>
+  </Tab>
+  <Tab value="React">
+    <Tabs groupId="react-install" items={['npm', 'pnpm', 'yarn', 'bun']}>
+      <Tab value="npm">
+        ```bash
+        npm install --save-dev vite-plugin-svgr @svgr/plugin-svgo @svgr/plugin-jsx
+        ```
+      </Tab>
+      <Tab value="pnpm">
+      ```bash
+      pnpm add -D vite-plugin-svgr @svgr/plugin-svgo @svgr/plugin-jsx
+      ```
+      </Tab>
+      <Tab value="yarn">
+      ```bash
+      yarn add -D vite-plugin-svgr @svgr/plugin-svgo @svgr/plugin-jsx
+      ```
+      </Tab>
+      <Tab value="bun">
+      ```bash
+      bun add -d vite-plugin-svgr @svgr/plugin-svgo @svgr/plugin-jsx
+      ```
+      </Tab>
+    </Tabs>
+  </Tab>
+</Tabs>
+
+This configuration file is the setup I created after experimenting with different SVGR approaches.
+
+
+<Tabs groupId="configuration" items={['next.config.ts', 'vite.config.ts']}>
+  <Tab value="next.config.ts">
+    ```ts
+    import type { NextConfig } from 'next';
+
+    const nextConfig: NextConfig = {
+      turbopack: {
+        rules: {
+          // 1. SVGs with gradients (keep original fill/stroke)
+          './assets/icons/gradients/**/*.svg': {
+            loaders: [
+              {
+                loader: '@svgr/webpack',
+                options: {
+                  typescript: true,
+                  ext: 'tsx',
+                  icon: false,
+                  svgo: true,
+                  svgoConfig: {
+                    plugins: [
+                      {
+                        name: 'preset-default',
+                        params: { overrides: { removeViewBox: false } },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: '*.tsx',
+          },
+
+          // 2. All other SVGs – remove fill/stroke
+          '*.svg': {
+            loaders: [
+              {
+                loader: '@svgr/webpack',
+                options: {
+                  typescript: true,
+                  ext: 'tsx',
+                  icon: false,
+                  svgo: true,
+                  svgoConfig: {
+                    plugins: [
+                      { name: 'removeAttrs', params: { attrs: '(fill|stroke)' } },
+                      {
+                        name: 'preset-default',
+                        params: { overrides: { removeViewBox: false } },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: '*.tsx',
+          },
+        },
+      },
+    };
+    export default nextConfig;
+    ```
+  </Tab>
+  <Tab value="vite.config.ts">
+    ```ts
+    import { defineConfig } from 'vite';
+    import react from '@vitejs/plugin-react';
+    import svgr from 'vite-plugin-svgr';
+
+    export default defineConfig({
+      plugins: [
+        react({ babel: { plugins: [['babel-plugin-react-compiler']] } }),
+
+        // Gradient icons (keep fills)
+        svgr({
+          include: ['**/assets/icons/gradients/**/*.svg*'],
+          svgrOptions: {
+            icon: false,
+            svgProps: {},
+            plugins: ['@svgr/plugin-svgo', '@svgr/plugin-jsx'],
+            svgoConfig: {
+              plugins: [
+                {
+                  name: 'preset-default',
+                  params: { overrides: { removeViewBox: false } },
+                },
+              ],
+            },
+          },
+        }),
+
+        // Normal icons (remove fill/stroke)
+        svgr({
+          exclude: ['**/assets/icons/gradients/**/*.svg*'],
+          svgrOptions: {
+            icon: false,
+            plugins: ['@svgr/plugin-svgo', '@svgr/plugin-jsx'],
+            svgoConfig: {
+              plugins: [
+                { name: 'removeAttrs', params: { attrs: '(fill|stroke)' } },
+                {
+                  name: 'preset-default',
+                  params: { overrides: { removeViewBox: false } },
+                },
+              ],
+            },
+          },
+        }),
+      ],
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Folder Structure
+
+<Tabs groupId="structure" items={['Next.js', 'React']}>
+  <Tab value="Next.js">
+    <Files>
+      <Folder name="app">
+        <File name="layout.tsx" />
+        <File name="page.tsx" />
+        <File name="global.css" />
+      </Folder>
+      <Folder name="components">
+        <File name="button.tsx" />
+        <File name="tabs.tsx" />
+        <File name="dialog.tsx" />
+      </Folder>
+      <Folder name="assets" defaultOpen>
+        <Folder name="icons" defaultOpen>
+          <Folder name="gradients" defaultOpen>
+            <File name="gradient-icon1.svg" />
+            <File name="gradient-icon2.svg" />
+            <File name="gradient-icon3.svg" />
+          </Folder>
+          <Folder name="solids" defaultOpen>
+            <File name="solid-icon1.svg" />
+            <File name="solid-icon2.svg" />
+            <File name="solid-icon3.svg" />
+          </Folder>
+        </Folder>
+      </Folder>
+
+      <File name="package.json" />
+      <File name="next.config.ts" />
+
+    </Files>
+  </Tab>
+  <Tab value="React">
+    <Files>
+      <Folder name="components">
+        <File name="button.tsx" />
+        <File name="tabs.tsx" />
+        <File name="dialog.tsx" />
+      </Folder>
+      <Folder name="assets" defaultOpen>
+        <Folder name="icons" defaultOpen>
+          <Folder name="gradients" defaultOpen>
+            <File name="gradient-icon1.svg" />
+            <File name="gradient-icon2.svg" />
+            <File name="gradient-icon3.svg" />
+          </Folder>
+          <Folder name="solids" defaultOpen>
+            <File name="solid-icon1.svg" />
+            <File name="solid-icon2.svg" />
+            <File name="solid-icon3.svg" />
+          </Folder>
+        </Folder>
+      </Folder>
+
+      <File name="package.json" />
+      <File name="vite.config.ts" />
+
+    </Files>
+  </Tab>
+</Tabs>
+
+---
+
+## Usage
+
+<Tabs groupId="usage" items={['page.tsx (Next.js)', 'page.tsx (React)']}>
+  <Tab value="page.tsx (Next.js)">
+    ```tsx
+    import Home from '@/assets/icons/solid/home.svg';
+
+    const Page = () => {
+      return (
+        <>
+          <Home
+            fill="orange"
+            width={224}
+            height={224}
+            style={{ backgroundColor: 'green' }}
+          />
+        </>
+      );
+    }
+
+    export default Page;
+    ```
+  </Tab>
+
+  <Tab value="page.tsx (React)">
+    ```tsx
+    import Home from '@/assets/icons/solid/home.svg?react';
+
+    const Page = () => {
+      return (
+        <>
+          <Home
+            fill="orange"
+            width={224}
+            height={224}
+            style={{ backgroundColor: 'green' }}
+          />
+        </>
+      );
+    }
+
+    export default Page;
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Tips & Common Mistakes
+When working with SVGs in React/Next.js, there are some common pitfalls and best practices to keep in mind:
+
+1. **ViewBox Removal**
+
+SVGO optimization sometimes removes the `viewBox` property from SVGs.
+Without a `viewBox`, SVGs won't scale properly when you change their `width` or `height`.
+
+Solution: Disable removeViewBox in your SVGR configuration (as done in our React/Next.js setup):
+```ts
+{
+  name: 'preset-default',
+  params: {
+    overrides: {
+      removeViewBox: false,
+    },
+  },
+}
+```
+
+<br />
+
+2. **Fill/Stroke Not Overridable**
+
+If you try to change the fill or stroke via props and it doesn’t work, it’s likely because the original SVG contains hard-coded attributes.
+
+Solution: Remove them in the configuration:
+```ts
+{
+  name: 'removeAttrs',
+  params: {
+    attrs: '(fill|stroke)',
+  },
+}
+```
+⚠️ Only use this for solid SVGs. Applying it to gradient-based SVGs will turn them into solid colors.
+
+<br />
+
+3. **Avoid replaceAttrValues for Changing SVG Colors**
+
+Using replaceAttrValues only works for the first instance call.
+For subsequent renders, the colors won’t update correctly.
+
+Avoid using it for reusable React components.
+
+<br />
+
+4. **Separate Rules for Solid vs Gradient Icons**
+
+Always define two distinct rules in your SVGR/webpack/Vite config:
+
+* Solid icons: remove `fill/stroke` to allow props-based color customization.
+* Gradient icons: keep `fill/stroke` intact to preserve the gradient effect.
+
+<br />
+
+5. **Controlling Gradient Colors**
+
+If you want to dynamically control gradient colors via props, convert the SVG into a React component using the SVGR CLI. This gives full control over the component and its styles.
+
+---
+
+## Using SVGR CLI (Optional)
+
+If you want more control and deeper component customization, you can generate React components from SVGs using the CLI, though in most cases, using the Webpack or Vite plugins is sufficient
+
+<Tabs items={['package.json']}>
+  <Tab value="package.json">
+  ```json
+  {
+    ...
+    "scripts": {
+      ...
+      "icons": "npx svgr --typescript --ext tsx -d ./components/icons ./assets"
+    }
+  }
+  ```
+  </Tab>
+</Tabs>
+
+**Optional SVGO config:**
+<Tabs items={['.svgo.yml']}>
+  <Tab value=".svgo.yml">
+  ```yml
+  plugins:
+    - name: preset-default
+      params:
+        overrides:
+          removeViewBox: false
+  ```
+  </Tab>
+</Tabs>
+
+Then you can run the script
+```bash
+npm run icons
+```
+
+The generated component will be as follows
+<Tabs items={['./components/icons/Android.tsx']}>
+  <Tab value="./components/icons/Android.tsx">
+  ```tsx
+  import * as React from 'react';
+  import type { SVGProps } from 'react';
+
+  const SvgAndroid = (props: SVGProps<SVGSVGElement>) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={48}
+      height={48}
+      fill="none"
+      viewBox="0 0 48 48"
+      {...props}>
+      <path fill="#000" fillRule="evenodd" d="..." clipRule="evenodd" />
+      <path fill="#000" d="..." />
+    </svg>
+  );
+
+  export default SvgAndroid;
+  ```
+  </Tab>
+</Tabs>
+
+Then you start using it in your components
+
+<Tabs items={['page.tsx']}>
+  <Tab value="page.tsx">
+  ```tsx
+  import AndroidIconComponent from './components/icons/Android';
+
+  const Page = () => {
+    return (
+      <>
+        <AndroidIconComponent />
+      </>
+    );
+  }
+
+  export default Page;
+  ```
+  </Tab>
+</Tabs>
+
+---
+
+## Tryout Yourself
+
+### Next.js
+
+<iframe
+  src="https://codesandbox.io/p/devbox/6n79rf"
+  style={{width:'100%', height: '500px', border:'0', borderRadius: '4px', overflow:'hidden'}}
+  title="Nextjs-svgr"
+  allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
+  sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+/>
+
+<br />
+
+### React + vite
+
+<iframe src="https://codesandbox.io/p/github/AmrShoukry/react-svgr/main?import=true&embed=1"
+  style={{width:'100%', height: '500px', border:'0', borderRadius: '4px', overflow:'hidden'}}
+  title="AmrShoukry/react-svgr/main"
+  allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
+  sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+></iframe>
+
+---
+
+## Further Information
+
+If you want to dive deeper into SVGR, you can check out the [official documentation](https://react-svgr.com/).
+To explore all the available optimization options with SVGO, their [documentation](https://svgo.dev/docs/introduction/) is a great resource.
+And for more details on SVGR’s configuration and options, take a look at the [SVGR options guide](https://react-svgr.com/docs/options/).
+
+---
+
+**Written By**
+
+<Card>
+  <Author name="Amr Shoukry" linkedin="https://www.linkedin.com/in/amrshoukry/" github="https://github.com/AmrShoukry/" title="Front-End Developer" src="/amr-shoukry.png" />
+</Card>
+
+---
