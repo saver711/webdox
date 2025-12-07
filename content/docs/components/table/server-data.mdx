@@ -357,102 +357,49 @@ export const useBloggersUrlState = () => useQueryStates(bloggersUrlStateSchema)
 
 The `BloggersTable` component orchestrates data fetching, filtering, and actions. It uses `useQuery` to fetch data based on the current URL state.
 
-<Tabs items={['Bloggers Table', 'Data Table']}>
+<Tabs items={['Bloggers Table', 'Query Params Hook', 'Delete Hook', 'Data Table']}>
   <Tab value="Bloggers Table">
 ```tsx title="app/bloggers/components/bloggers-table.tsx"
-"use client"
+"use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Trash2 } from "lucide-react"
-import { useAction } from "next-safe-action/hooks"
-import { useState } from "react"
-import { toast } from "sonner"
-import { deleteBloggersAction } from "@/app/actions/delete-blogger.action"
-import { DEFAULT_TABLE_PAGE_INDEX_VALUE } from "@/app/components/ui/table/consts/default-table-page-index-value.const"
-import { DEFAULT_TABLE_PER_PAGE_VALUE } from "@/app/components/ui/table/consts/default-table-per-page-value.const"
-import { DataTable } from "@/app/components/ui/table/data-table"
-import { useTablePagination } from "@/app/components/ui/table/hooks/use-table-pagination"
-import { useTableSorting } from "@/app/components/ui/table/hooks/use-table-sorting"
-import { fetchBloggers } from "@/app/lib/services/blogger.service"
-import { SortOrder } from "@/app/models/api.model"
-import { Button } from "@/components/ui/button"
-import { useBloggersUrlState } from "../hooks/use-bloggers-url-state"
-import type { Blogger, BloggersTableParams } from "../models/blogger.model"
-import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util"
-import { BloggersFilterBar } from "./bloggers-filter-bar"
+import { useQuery } from "@tanstack/react-query";
+import { Trash2 } from "lucide-react";
+import { DataTable } from "@/app/components/ui/table/data-table";
+import { fetchBloggers } from "@/app/lib/services/blogger.service";
+import { Button } from "@/components/ui/button";
+import { useBloggersQueryParams } from "../hooks/use-bloggers-query-params";
+import { useDeleteBloggers } from "../hooks/use-delete-bloggers";
+import { getBloggersTableColumns } from "../utils/get-bloggers-table-columns.util";
+import { BloggersFilterBar } from "./bloggers-filter-bar";
 
 export const BloggersTable = () => {
-  const { sorting, setSorting } = useTableSorting()
-  const { pagination, setPagination } = useTablePagination()
-  const queryClient = useQueryClient()
-  const [selectedBloggers, setSelectedBloggers] = useState<Blogger[]>([])
-  const [query] = useBloggersUrlState()
+    const {
+      sorting,
+      setSorting,
+      pagination,
+      setPagination,
+      fetchBloggersParams,
+    } = useBloggersQueryParams();
 
-const sortBy = sorting?.[0]?.id
-const sortOrder = sortBy
-? sorting?.[0]?.desc
-? SortOrder.DESC
-: SortOrder.ASC
-: undefined
+    const {
+      data: bloggersResponse,
+      error,
+      isLoading,
+    } = useQuery({
+      queryKey: ["bloggers", fetchBloggersParams],
+      queryFn: () => fetchBloggers(fetchBloggersParams),
+    });
 
-const fetchBloggersParams: BloggersTableParams = {
-page: pagination.pageIndex + 1 || DEFAULT_TABLE_PAGE_INDEX_VALUE + 1,
-perPage: pagination.pageSize || DEFAULT_TABLE_PER_PAGE_VALUE,
-sortBy,
-sortOrder,
-name: query.name,
-bio: query.bio,
-dateFrom: query.dateFrom,
-dateTo: query.dateTo
-}
+    const data = bloggersResponse?.data;
 
-const {
-data: bloggersResponse,
-error,
-isLoading
-} = useQuery({
-queryKey: ["bloggers", fetchBloggersParams],
-queryFn: () => fetchBloggers(fetchBloggersParams)
+const { selectedBloggers, setSelectedBloggers, deleteBloggers } =
+useDeleteBloggers({
+pagination,
+setPagination,
+currentDataLength: data?.length
 })
-const data = bloggersResponse?.data
-
-const { execute: deleteBloggers } = useAction(deleteBloggersAction, {
-onSuccess: successData => {
-toast.success("Blogger deleted successfully.")
-
-      // IF it was the very last blogger on the page, go back one page unless we are on the first page
-      if (
-        data &&
-        data.length === successData.input.length &&
-        pagination.pageIndex > 0
-      ) {
-        setPagination(prev => ({
-          ...prev,
-          pageIndex: prev.pageIndex - 1
-        }))
-      } else {
-        queryClient.invalidateQueries({ queryKey: ["bloggers"] })
-      }
-      const deletedIds = successData.input
-
-      // Clear selected bloggers if they were deleted
-      setSelectedBloggers(prev => prev.filter(b => !deletedIds.includes(b._id)))
-    },
-    onError: error => {
-      const errors = error.error.validationErrors
-      if (errors?._errors?.length) {
-        errors._errors.forEach((errMsg: string) => {
-          toast.error(errMsg)
-        })
-      } else {
-        toast.error("An error occurred while deleting the blogger.")
-      }
-    }
-
-})
-
-const columns = getBloggersTableColumns({ onDelete: deleteBloggers })
 const pageCount = bloggersResponse?.pagination.pageCount
+const columns = getBloggersTableColumns({ onDelete: deleteBloggers });
 
 return (
 
@@ -495,6 +442,121 @@ return (
 
 ````
   </Tab>
+
+  <Tab value="Query Params Hook">
+```tsx title="app/bloggers/hooks/use-bloggers-query-params.ts"
+import { DEFAULT_TABLE_PAGE_INDEX_VALUE } from "@/app/components/ui/table/consts/default-table-page-index-value.const";
+import { DEFAULT_TABLE_PER_PAGE_VALUE } from "@/app/components/ui/table/consts/default-table-per-page-value.const";
+import { useTablePagination } from "@/app/components/ui/table/hooks/use-table-pagination";
+import { useTableSorting } from "@/app/components/ui/table/hooks/use-table-sorting";
+import { SortOrder } from "@/app/models/api.model";
+import type { BloggersTableParams } from "../models/blogger.model";
+import { useBloggersUrlState } from "./use-bloggers-url-state";
+
+export const useBloggersQueryParams = () => {
+  const { sorting, setSorting } = useTableSorting();
+  const { pagination, setPagination } = useTablePagination();
+  const [{ name, bio, dateFrom, dateTo }] = useBloggersUrlState();
+
+  const sortItem = sorting?.[0];
+  const sortBy = sortItem?.id;
+  let sortOrder: SortOrder | undefined;
+
+  if (sortBy) {
+    sortOrder = sortItem?.desc ? SortOrder.DESC : SortOrder.ASC;
+  }
+
+  const fetchBloggersParams: BloggersTableParams = {
+    page: pagination.pageIndex + 1 || DEFAULT_TABLE_PAGE_INDEX_VALUE + 1,
+    perPage: pagination.pageSize || DEFAULT_TABLE_PER_PAGE_VALUE,
+    sortBy,
+    sortOrder,
+    name,
+    bio,
+    dateFrom,
+    dateTo,
+  };
+
+  return {
+    sorting,
+    setSorting,
+    pagination,
+    setPagination,
+    fetchBloggersParams,
+  };
+};
+````
+
+  </Tab>
+  <Tab value="Delete Hook">
+```tsx title="app/bloggers/hooks/use-delete-bloggers.ts"
+import { useQueryClient } from "@tanstack/react-query";
+import type { PaginationState } from "@tanstack/react-table";
+import { useAction } from "next-safe-action/hooks";
+import { useState } from "react";
+import { toast } from "sonner";
+import { deleteBloggersAction } from "@/app/actions/delete-blogger.action";
+import type { Blogger } from "../models/blogger.model";
+
+interface UseDeleteBloggersProps {
+pagination: PaginationState
+setPagination: (updater: (prev: PaginationState) => PaginationState) => void
+currentDataLength?: number
+}
+
+export const useDeleteBloggers = ({
+  pagination,
+  setPagination,
+  currentDataLength,
+}: UseDeleteBloggersProps) => {
+  const queryClient = useQueryClient();
+  const [selectedBloggers, setSelectedBloggers] = useState<Blogger[]>([]);
+
+const { execute: deleteBloggers } = useAction(deleteBloggersAction, {
+onSuccess: data => {
+toast.success("Blogger deleted successfully.")
+
+      const deletedIds = data.input
+
+      if (
+        currentDataLength &&
+        currentDataLength === deletedIds.length &&
+        pagination.pageIndex > 0
+      ) {
+        setPagination(prev => ({
+          ...prev,
+          pageIndex: prev.pageIndex - 1
+        }))
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["bloggers"] })
+      }
+
+      setSelectedBloggers(prev =>
+        prev.filter(b => !deletedIds.includes(b._id))
+      )
+    },
+    onError: error => {
+      const errors = error.error.validationErrors
+      if (errors?._errors?.length) {
+        errors._errors.forEach((errMsg: string) => {
+          toast.error(errMsg)
+        })
+      } else {
+        toast.error("An error occurred while deleting the blogger.")
+      }
+    }
+
+})
+
+return {
+selectedBloggers,
+setSelectedBloggers,
+deleteBloggers
+}
+};
+
+````
+  </Tab>
   <Tab value="Data Table">
 ```tsx title="app/components/ui/table/data-table.tsx"
 "use client"
@@ -521,20 +583,20 @@ import {
 import { TablePagination } from "./table-pagination"
 
 interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[]
-  data: TData[]
-  onRowSelectionChange?: (selectedRows: TData[]) => void
-  rowId: keyof TData
+columns: ColumnDef<TData, TValue>[]
+data: TData[]
+onRowSelectionChange?: (selectedRows: TData[]) => void
+rowId: keyof TData
 
-  sorting: SortingState
-  setSorting: Dispatch<SetStateAction<SortingState>>
+sorting: SortingState
+setSorting: Dispatch<SetStateAction<SortingState>>
 
-  setPagination: (updater: SetStateAction<PaginationState>) => void
-  pagination: PaginationState
+setPagination: (updater: SetStateAction<PaginationState>) => void
+pagination: PaginationState
 
-  pageCount: number
-  isLoading?: boolean
-  error?: string
+pageCount: number
+isLoading?: boolean
+error?: string
 }
 
 export const DataTable = <TData, TValue>({
@@ -545,12 +607,12 @@ export const DataTable = <TData, TValue>({
   sorting,
   setSorting,
 
-  setPagination,
-  pagination,
+setPagination,
+pagination,
 
-  pageCount,
-  isLoading,
-  error
+pageCount,
+isLoading,
+error
 }: DataTableProps<TData, TValue>) => {
   const [rowSelection, setRowSelection] = useState({})
 
@@ -670,6 +732,7 @@ export const DataTable = <TData, TValue>({
     </div>
   )
 }
+
 ````
 
   </Tab>
@@ -791,13 +854,14 @@ return (
 ) }
 
 ````
+
   </Tab>
   <Tab value="Hooks">
 ```tsx title="app/components/ui/table/hooks/use-table-pagination.ts"
 import type { PaginationState, Updater } from "@tanstack/react-table"
 import { useTableUrlState } from "./use-table-url-state"
 
-/** nuqs Hook for managing table pagination state via URL parameters */
+/\*_ nuqs Hook for managing table pagination state via URL parameters _/
 export const useTablePagination = (page = "page", perPage = "perPage") => {
   const [urlState, setUrlState] = useTableUrlState({
     pageParamName: page,
@@ -819,6 +883,7 @@ export const useTablePagination = (page = "page", perPage = "perPage") => {
 
   return { pagination, setPagination }
 }
+
 ````
 
 ```tsx title="app/components/ui/table/hooks/use-table-sorting.ts"
@@ -921,6 +986,7 @@ export const getBloggersTableColumns = ({
 }
 
 ````
+
   </Tab>
 </Tabs>
 
@@ -1190,6 +1256,41 @@ export const DeleteBlogger = ({ blogger, onDelete }: DeleteBloggerProps) => {
 
   </Tab>
 </Tabs>
+
+---
+
+## Checkout Full Code
+
+<div className="not-prose my-8">
+  <a
+    href="https://github.com/saver711/webdox_server-data-table"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="block group"
+  >
+    <div className="rounded-xl border border-border bg-gradient-to-br from-card via-card to-muted/30 p-6 hover:shadow-xl hover:border-primary/50">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 bg-white p-2 rounded-lg">
+          <img src="/github.png" alt="GitHub" className="w-12 h-12 rounded-lg" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-semibold text-foreground group-hover:text-primary mb-3">
+            Complete Implementation
+          </h3>
+
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary font-medium">
+              GitHub Repository
+            </span>
+            <span className="font-mono">saver711/webdox_server-data-table</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </a>
+</div>
 
 ---
 
